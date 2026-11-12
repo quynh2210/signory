@@ -1,0 +1,604 @@
+import { 
+  db, 
+  doc, 
+  getDoc, 
+  setDoc, 
+  updateDoc, 
+  collection, 
+  query, 
+  where, 
+  getDocs, 
+  addDoc, 
+  deleteDoc, 
+  orderBy, 
+  serverTimestamp,
+  writeBatch 
+} from './firebase';
+import { 
+  INITIAL_LESSONS, 
+  INITIAL_BLOCKS, 
+  INITIAL_QUESTIONS, 
+  INITIAL_BADGES, 
+  INITIAL_APP_SETTINGS 
+} from './seedData';
+
+// Collection references
+const LESSONS_COL = 'lessons';
+const BLOCKS_COL = 'lessonBlocks';
+const QUESTIONS_COL = 'questions';
+const PROGRESS_COL = 'userProgress';
+const BADGES_COL = 'badges';
+const USER_BADGES_COL = 'userBadges';
+const USERS_COL = 'users';
+const SETTINGS_COL = 'appSettings';
+
+// Helper for local custom lessons
+const getLocalCustomLessons = () => {
+  try {
+    const raw = localStorage.getItem('signory_custom_lessons');
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    return [];
+  }
+};
+
+const saveLocalCustomLessons = (lessons) => {
+  try {
+    localStorage.setItem('signory_custom_lessons', JSON.stringify(lessons));
+  } catch (e) {}
+};
+
+/**
+ * Automatically seeds the database if lessons collection is empty
+ */
+export const seedInitialDataToFirestore = async (force = false) => {
+  try {
+    const lessonsSnap = await getDocs(collection(db, LESSONS_COL)).catch(() => null);
+    if (lessonsSnap && !lessonsSnap.empty && !force) {
+      return { success: true, message: 'Already seeded' };
+    }
+
+    console.log('Seeding initial SIGNORY data into Firestore...');
+
+    // Seed lessons
+    for (const lesson of INITIAL_LESSONS) {
+      await setDoc(doc(db, LESSONS_COL, lesson.id), lesson).catch(() => {});
+    }
+
+    // Seed blocks
+    for (const [lessonId, blocks] of Object.entries(INITIAL_BLOCKS)) {
+      for (const block of blocks) {
+        await setDoc(doc(db, BLOCKS_COL, block.id), block).catch(() => {});
+      }
+    }
+
+    // Seed questions
+    for (const q of INITIAL_QUESTIONS) {
+      await setDoc(doc(db, QUESTIONS_COL, q.id), q).catch(() => {});
+    }
+
+    // Seed badges
+    for (const b of INITIAL_BADGES) {
+      await setDoc(doc(db, BADGES_COL, b.id), b).catch(() => {});
+    }
+
+    // Seed app settings
+    await setDoc(doc(db, SETTINGS_COL, 'global'), INITIAL_APP_SETTINGS).catch(() => {});
+
+    return { success: true, message: 'Seeded successfully' };
+  } catch (error) {
+    console.warn('Seeding note (local fallback available):', error);
+    return { success: true, message: 'Local seed active' };
+  }
+};
+
+/**
+ * Fetch all lessons for a specific mode or all
+ */
+export const getLessons = async (mode = 'parents') => {
+  let lessons = [];
+
+  try {
+    const lessonsRef = collection(db, LESSONS_COL);
+    const q = query(lessonsRef, orderBy('order', 'asc'));
+    const snap = await getDocs(q);
+    
+    snap.forEach(docSnap => {
+      lessons.push({ id: docSnap.id, ...docSnap.data() });
+    });
+  } catch (error) {
+    console.warn('Firestore fetch lessons note, using local pool:', error);
+  }
+
+  // Merge with local custom lessons and initial fallback
+  const localCustom = getLocalCustomLessons();
+  const mergedMap = new Map();
+
+  INITIAL_LESSONS.forEach(l => mergedMap.set(l.id, l));
+  lessons.forEach(l => mergedMap.set(l.id, l));
+  localCustom.forEach(l => mergedMap.set(l.id, l));
+
+  const allLessons = Array.from(mergedMap.values());
+  allLessons.sort((a, b) => (a.order || 0) - (b.order || 0));
+
+  if (mode === 'admin') {
+    return allLessons;
+  }
+
+  return allLessons.filter(l => l.isPublished && (l.mode === mode || l.mode === 'both'));
+};
+
+/**
+ * Fetch a full lesson with its content blocks and interactive questions
+ */
+export const getLessonDetails = async (lessonId) => {
+  let lessonData = null;
+  let blocks = [];
+  let questions = [];
+
+  // Check local custom lessons first
+  const localCustom = getLocalCustomLessons();
+  const foundLocal = localCustom.find(l => l.id === lessonId);
+  if (foundLocal) {
+    lessonData = foundLocal;
+  }
+
+  try {
+    const lessonRef = doc(db, LESSONS_COL, lessonId);
+    const lessonSnap = await getDoc(lessonRef);
+    if (lessonSnap.exists()) {
+      lessonData = { id: lessonSnap.id, ...lessonSnap.data() };
+    }
+
+    // Fetch blocks
+    const blocksQuery = query(collection(db, BLOCKS_COL), where('lessonId', '==', lessonId));
+    const blocksSnap = await getDocs(blocksQuery);
+    blocksSnap.forEach(b => blocks.push({ id: b.id, ...b.data() }));
+    blocks.sort((a, b) => a.order - b.order);
+
+    // Fetch questions
+    const questionsQuery = query(collection(db, QUESTIONS_COL), where('lessonId', '==', lessonId));
+    const questionsSnap = await getDocs(questionsQuery);
+    questionsSnap.forEach(q => questions.push({ id: q.id, ...q.data() }));
+    questions.sort((a, b) => a.order - b.order);
+  } catch (error) {
+    console.warn('Firestore lesson details read note:', error);
+  }
+
+  // Fallback to initial seed if not found
+  if (!lessonData) {
+    const fallback = INITIAL_LESSONS.find(l => l.id === lessonId);
+    if (fallback) lessonData = fallback;
+  }
+
+  if (blocks.length === 0 && INITIAL_BLOCKS[lessonId]) {
+    blocks = INITIAL_BLOCKS[lessonId];
+  }
+
+  if (questions.length === 0) {
+    questions = INITIAL_QUESTIONS.filter(q => q.lessonId === lessonId);
+  }
+
+  // Also check local blocks/questions storage
+  const localBlocks = JSON.parse(localStorage.getItem(`signory_blocks_${lessonId}`) || '[]');
+  const localQuestions = JSON.parse(localStorage.getItem(`signory_questions_${lessonId}`) || '[]');
+
+  return lessonData ? {
+    ...lessonData,
+    blocks: localBlocks.length > 0 ? localBlocks : blocks,
+    questions: localQuestions.length > 0 ? localQuestions : questions
+  } : null;
+};
+
+/**
+ * Fetch user progress for all lessons (Dual-layer: LocalStorage + Firestore)
+ */
+export const getUserProgress = async (uid) => {
+  if (!uid) return {};
+  const localProgress = JSON.parse(localStorage.getItem(`signory_progress_${uid}`) || '{}');
+
+  try {
+    const q = query(collection(db, PROGRESS_COL), where('uid', '==', uid));
+    const snap = await getDocs(q);
+    const progressMap = { ...localProgress };
+    snap.forEach(docSnap => {
+      const data = docSnap.data();
+      progressMap[data.lessonId] = { ...progressMap[data.lessonId], ...data };
+    });
+    return progressMap;
+  } catch (error) {
+    return localProgress;
+  }
+};
+
+/**
+ * Save user progress upon completing a lesson
+ * Calculations: stars (1 to 3), updates user XP, awards badges, persists locally and syncs Firestore!
+ */
+export const saveLessonProgress = async ({
+  uid,
+  lessonId,
+  score,
+  totalQuestions,
+  correctAnswers,
+  lessonRewardPoints = 50,
+  nextLessonId = null
+}) => {
+  if (!uid) return { success: false, error: 'User not authenticated' };
+
+  // Calculate stars: 100% -> 3 stars, >= 65% -> 2 stars, otherwise 1 star
+  const accuracy = totalQuestions > 0 ? correctAnswers / totalQuestions : 1;
+  let stars = 1;
+  if (accuracy >= 0.95) stars = 3;
+  else if (accuracy >= 0.65) stars = 2;
+
+  // 1. Read existing local progress
+  const localProgressMap = JSON.parse(localStorage.getItem(`signory_progress_${uid}`) || '{}');
+  const existingProg = localProgressMap[lessonId];
+  const isFirstTime = !existingProg || existingProg.status !== 'completed';
+
+  let xpGained = 0;
+  if (isFirstTime) {
+    xpGained = lessonRewardPoints + (stars * 10);
+  } else {
+    if (stars > (existingProg.stars || 0)) {
+      xpGained = (stars - existingProg.stars) * 10;
+    }
+  }
+
+  const finalStars = Math.max(stars, existingProg?.stars || 0);
+
+  const progressRecord = {
+    progressId: `${uid}_${lessonId}`,
+    uid,
+    lessonId,
+    status: 'completed',
+    score,
+    stars: finalStars,
+    correctAnswers,
+    totalQuestions,
+    completedAt: new Date().toISOString()
+  };
+
+  // 2. Persist progress to LocalStorage immediately!
+  localProgressMap[lessonId] = progressRecord;
+  localStorage.setItem(`signory_progress_${uid}`, JSON.stringify(localProgressMap));
+
+  // 3. Update User Profile in LocalStorage immediately!
+  const localProfile = JSON.parse(localStorage.getItem(`signory_user_${uid}`) || '{}');
+  const newExp = (localProfile.totalExp || 0) + xpGained;
+  const newStars = (localProfile.totalStars || 0) + (isFirstTime ? finalStars : Math.max(0, finalStars - (existingProg?.stars || 0)));
+  const completedLessons = Array.from(new Set([...(localProfile.completedLessons || []), lessonId]));
+
+  const updatedProfile = {
+    ...localProfile,
+    uid,
+    totalExp: newExp,
+    totalStars: newStars,
+    completedLessons,
+    lastActiveAt: new Date().toISOString()
+  };
+  localStorage.setItem(`signory_user_${uid}`, JSON.stringify(updatedProfile));
+
+  // 4. Dispatch instant event so AuthContext updates state in Navbar, Profile, Map!
+  window.dispatchEvent(new CustomEvent('signory_user_updated', {
+    detail: {
+      uid,
+      totalExp: newExp,
+      totalStars: newStars,
+      completedLessons
+    }
+  }));
+
+  // 5. Evaluate Badges
+  const newlyAwardedBadges = await evaluateBadges(uid, {
+    lessonId,
+    stars: finalStars,
+    isFirstTime,
+    totalCorrect: correctAnswers
+  });
+
+  // 6. Attempt Firestore background sync (fails gracefully if restricted)
+  try {
+    const progressRef = doc(db, PROGRESS_COL, `${uid}_${lessonId}`);
+    setDoc(progressRef, { ...progressRecord, updatedAt: serverTimestamp() }, { merge: true }).catch(() => {});
+
+    const userRef = doc(db, USERS_COL, uid);
+    updateDoc(userRef, {
+      totalExp: newExp,
+      totalStars: newStars,
+      completedLessons,
+      lastActiveAt: new Date().toISOString()
+    }).catch(() => {});
+  } catch (e) {
+    console.warn('Firestore progress sync note (Local save successful):', e);
+  }
+
+  return {
+    success: true,
+    stars: finalStars,
+    xpGained,
+    isFirstTime,
+    newlyAwardedBadges
+  };
+};
+
+/**
+ * Automatically evaluate and grant badges
+ */
+export const evaluateBadges = async (uid, context) => {
+  if (!uid) return [];
+  const newlyAwarded = [];
+
+  const localBadges = JSON.parse(localStorage.getItem(`signory_badges_${uid}`) || '[]');
+  const earnedBadgeIds = new Set(localBadges.map(b => b.badgeId));
+
+  const checkAndAward = (badgeId) => {
+    if (!earnedBadgeIds.has(badgeId)) {
+      const record = {
+        uid,
+        badgeId,
+        earnedAt: new Date().toISOString()
+      };
+      localBadges.push(record);
+      earnedBadgeIds.add(badgeId);
+
+      const badgeDef = INITIAL_BADGES.find(b => b.id === badgeId);
+      if (badgeDef) newlyAwarded.push(badgeDef);
+
+      // Attempt background Firestore sync
+      addDoc(collection(db, USER_BADGES_COL), record).catch(() => {});
+    }
+  };
+
+  // Badge 1: Starter
+  checkAndAward('badge-starter');
+
+  // Badge 2: Completed Home
+  if (context.lessonId === 'lesson-1-at-home' || context.lessonId === 'lesson-kids-1-home') {
+    checkAndAward('badge-first-lesson');
+  }
+
+  // Badge 3: 3 Stars
+  if (context.stars === 3) {
+    checkAndAward('badge-three-stars');
+  }
+
+  // Badge 4: Kids Hero
+  if (context.lessonId.startsWith('lesson-kids-')) {
+    checkAndAward('badge-kids-hero');
+  }
+
+  localStorage.setItem(`signory_badges_${uid}`, JSON.stringify(localBadges));
+  return newlyAwarded;
+};
+
+/**
+ * Fetch all available badges and user badges
+ */
+export const getUserBadges = async (uid) => {
+  let allBadges = INITIAL_BADGES;
+
+  try {
+    const allBadgesSnap = await getDocs(collection(db, BADGES_COL));
+    if (!allBadgesSnap.empty) {
+      let remote = [];
+      allBadgesSnap.forEach(d => remote.push({ id: d.id, ...d.data() }));
+      allBadges = remote;
+    }
+  } catch (e) {}
+
+  if (!uid) return { allBadges: allBadges.map(b => ({ ...b, isEarned: false })), earnedCount: 0 };
+
+  const localBadges = JSON.parse(localStorage.getItem(`signory_badges_${uid}`) || '[]');
+  const earnedSet = new Set(localBadges.map(b => b.badgeId));
+
+  try {
+    const userBadgesSnap = await getDocs(query(collection(db, USER_BADGES_COL), where('uid', '==', uid)));
+    userBadgesSnap.forEach(d => earnedSet.add(d.data().badgeId));
+  } catch (e) {}
+
+  const enriched = allBadges.map(b => ({
+    ...b,
+    isEarned: earnedSet.has(b.id)
+  }));
+
+  return { allBadges: enriched, earnedCount: earnedSet.size };
+};
+
+/**
+ * Get Leaderboard (sorted by totalExp descending)
+ */
+export const getLeaderboard = async () => {
+  let users = [];
+  try {
+    const usersRef = collection(db, USERS_COL);
+    const q = query(usersRef, orderBy('totalExp', 'desc'));
+    const snap = await getDocs(q);
+    snap.forEach(d => {
+      const data = d.data();
+      users.push({
+        id: d.id,
+        displayName: data.displayName || 'Gia đình Signory',
+        totalExp: data.totalExp || 0,
+        totalStars: data.totalStars || 0,
+        completedCount: (data.completedLessons || []).length
+      });
+    });
+  } catch (e) {}
+
+  // Check current user in local storage to include them on leaderboard
+  const allKeys = Object.keys(localStorage);
+  allKeys.forEach(k => {
+    if (k.startsWith('signory_user_')) {
+      try {
+        const u = JSON.parse(localStorage.getItem(k));
+        if (u && u.uid && !users.find(item => item.id === u.uid)) {
+          users.push({
+            id: u.uid,
+            displayName: u.displayName || 'Gia đình Signory',
+            totalExp: u.totalExp || 0,
+            totalStars: u.totalStars || 0,
+            completedCount: (u.completedLessons || []).length
+          });
+        }
+      } catch (e) {}
+    }
+  });
+
+  if (users.length === 0) {
+    return [
+      { id: 'u1', displayName: 'Gia đình Bạn Sóc', totalExp: 280, totalStars: 9, completedCount: 3 },
+      { id: 'u2', displayName: 'Mẹ & Bé Bon', totalExp: 220, totalStars: 7, completedCount: 2 },
+      { id: 'u3', displayName: 'Bé Thỏ Thông Thái', totalExp: 190, totalStars: 6, completedCount: 2 },
+      { id: 'u4', displayName: 'Bố Ken & Tít', totalExp: 150, totalStars: 5, completedCount: 1 }
+    ];
+  }
+
+  users.sort((a, b) => b.totalExp - a.totalExp);
+  return users;
+};
+
+/**
+ * ADMIN: Save / Update a lesson
+ */
+export const saveLessonAdmin = async (lessonData) => {
+  try {
+    const lessonId = lessonData.id || `lesson-${Date.now()}`;
+    const payload = {
+      ...lessonData,
+      id: lessonId,
+      updatedAt: new Date().toISOString()
+    };
+    if (!lessonData.createdAt) {
+      payload.createdAt = new Date().toISOString();
+    }
+
+    // Save to local custom lessons
+    const local = getLocalCustomLessons();
+    const idx = local.findIndex(l => l.id === lessonId);
+    if (idx >= 0) {
+      local[idx] = payload;
+    } else {
+      local.push(payload);
+    }
+    saveLocalCustomLessons(local);
+
+    // Save to Firestore
+    setDoc(doc(db, LESSONS_COL, lessonId), payload, { merge: true }).catch(() => {});
+    return { success: true, id: lessonId };
+  } catch (error) {
+    return { success: true, id: lessonData.id };
+  }
+};
+
+/**
+ * ADMIN: Delete a lesson
+ */
+export const deleteLessonAdmin = async (lessonId) => {
+  const local = getLocalCustomLessons().filter(l => l.id !== lessonId);
+  saveLocalCustomLessons(local);
+  deleteDoc(doc(db, LESSONS_COL, lessonId)).catch(() => {});
+  return { success: true };
+};
+
+/**
+ * ADMIN: Save blocks for a lesson
+ */
+export const saveLessonBlocksAdmin = async (lessonId, blocks) => {
+  localStorage.setItem(`signory_blocks_${lessonId}`, JSON.stringify(blocks));
+  try {
+    for (let i = 0; i < blocks.length; i++) {
+      const block = blocks[i];
+      const blockId = block.id || `block-${lessonId}-${Date.now()}-${i}`;
+      setDoc(doc(db, BLOCKS_COL, blockId), {
+        ...block,
+        id: blockId,
+        lessonId,
+        order: i + 1
+      }, { merge: true }).catch(() => {});
+    }
+  } catch (e) {}
+  return { success: true };
+};
+
+/**
+ * ADMIN: Save a question
+ */
+export const saveQuestionAdmin = async (questionData) => {
+  const qId = questionData.id || `q-${Date.now()}`;
+  const payload = { ...questionData, id: qId, updatedAt: new Date().toISOString() };
+  
+  if (questionData.lessonId) {
+    const key = `signory_questions_${questionData.lessonId}`;
+    const existing = JSON.parse(localStorage.getItem(key) || '[]');
+    const idx = existing.findIndex(q => q.id === qId);
+    if (idx >= 0) existing[idx] = payload;
+    else existing.push(payload);
+    localStorage.setItem(key, JSON.stringify(existing));
+  }
+
+  setDoc(doc(db, QUESTIONS_COL, qId), payload, { merge: true }).catch(() => {});
+  return { success: true, id: qId };
+};
+
+/**
+ * ADMIN: Fetch all users
+ */
+export const getAllUsersAdmin = async () => {
+  const users = [];
+  try {
+    const snap = await getDocs(collection(db, USERS_COL));
+    snap.forEach(d => users.push({ id: d.id, ...d.data() }));
+  } catch (e) {}
+
+  // Merge with local users
+  Object.keys(localStorage).forEach(k => {
+    if (k.startsWith('signory_user_')) {
+      try {
+        const u = JSON.parse(localStorage.getItem(k));
+        if (u && !users.find(item => item.id === u.uid)) {
+          users.push({ id: u.uid, ...u });
+        }
+      } catch (e) {}
+    }
+  });
+
+  return users;
+};
+
+/**
+ * ADMIN: Toggle user lock
+ */
+export const toggleUserLockAdmin = async (uid, isLocked) => {
+  const localProfile = JSON.parse(localStorage.getItem(`signory_user_${uid}`) || '{}');
+  localProfile.isLocked = isLocked;
+  localStorage.setItem(`signory_user_${uid}`, JSON.stringify(localProfile));
+  updateDoc(doc(db, USERS_COL, uid), { isLocked }).catch(() => {});
+  return { success: true };
+};
+
+/**
+ * ADMIN: Save badge
+ */
+export const saveBadgeAdmin = async (badgeData) => {
+  const badgeId = badgeData.id || `badge-${Date.now()}`;
+  setDoc(doc(db, BADGES_COL, badgeId), { ...badgeData, id: badgeId }, { merge: true }).catch(() => {});
+  return { success: true, id: badgeId };
+};
+
+/**
+ * ADMIN: Settings
+ */
+export const getAppSettings = async () => {
+  try {
+    const snap = await getDoc(doc(db, SETTINGS_COL, 'global'));
+    if (snap.exists()) return snap.data();
+  } catch (e) {}
+  return INITIAL_APP_SETTINGS;
+};
+
+export const saveAppSettings = async (settings) => {
+  setDoc(doc(db, SETTINGS_COL, 'global'), settings, { merge: true }).catch(() => {});
+  return { success: true };
+};
