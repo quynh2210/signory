@@ -51,24 +51,24 @@ export const LeaderboardPage = () => {
         </div>
 
         {/* Daily Goal Reminder Card */}
-        <div className="bg-white/90 backdrop-blur-md rounded-2xl p-4 shadow-sm border border-yellow-200 text-slate-800 text-center min-w-[200px]">
-          <div className="flex items-center justify-center gap-1.5 text-amber-600 font-black text-sm mb-1">
+        <div className="bg-white/95 dark:bg-slate-800/95 backdrop-blur-md rounded-2xl p-4 shadow-sm border border-yellow-200 dark:border-yellow-600/40 text-slate-800 dark:text-slate-100 text-center min-w-[200px]">
+          <div className="flex items-center justify-center gap-1.5 text-amber-600 dark:text-amber-400 font-black text-sm mb-1">
             <Flame className="w-4 h-4 fill-amber-500" />
             <span>Mục Tiêu Hôm Nay</span>
           </div>
-          <p className="text-2xl font-black text-slate-800">
+          <p className="text-2xl font-black text-slate-800 dark:text-slate-100">
             {userProfile?.totalExp || 0} / {userProfile?.dailyGoal || 30} XP
           </p>
-          <span className="text-xs font-bold text-slate-500">
+          <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
             {(userProfile?.totalExp || 0) >= (userProfile?.dailyGoal || 30) ? '🎉 Đã hoàn thành mục tiêu!' : 'Học thêm 1 bài để đạt mục tiêu!'}
           </span>
         </div>
       </div>
 
       {/* Leaderboard Table */}
-      <div className="bg-white rounded-3xl border-2 border-slate-100 shadow-sm overflow-hidden">
-        <div className="p-5 border-b border-slate-100 flex items-center justify-between">
-          <h3 className="font-black text-lg text-slate-800">Bảng Xếp Hạng Toàn Hệ Thống</h3>
+      <div className="bg-white dark:bg-slate-800 rounded-3xl border-2 border-slate-100 dark:border-slate-700 shadow-sm overflow-hidden">
+        <div className="p-5 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
+          <h3 className="font-black text-lg text-slate-800 dark:text-slate-100">Bảng Xếp Hạng Toàn Hệ Thống</h3>
           <span className="text-xs font-bold text-slate-400">Cập nhật theo thời gian thực</span>
         </div>
 
@@ -78,7 +78,7 @@ export const LeaderboardPage = () => {
             <p className="text-sm font-bold text-slate-400">Đang tải bảng xếp hạng...</p>
           </div>
         ) : (
-          <div className="divide-y divide-slate-100">
+          <div className="divide-y divide-slate-100 dark:divide-slate-700">
             {users.map((item, index) => {
               const rank = index + 1;
               const isCurrentUser = user && item.id === user.uid;
@@ -87,7 +87,7 @@ export const LeaderboardPage = () => {
                 <div
                   key={item.id}
                   className={`p-4 md:px-6 flex items-center justify-between gap-4 transition-colors ${
-                    isCurrentUser ? 'bg-amber-50/70 border-l-4 border-amber-400' : 'hover:bg-slate-50'
+                    isCurrentUser ? 'bg-amber-50/70 dark:bg-amber-950/40 border-l-4 border-amber-400' : 'hover:bg-slate-50 dark:hover:bg-slate-700/50'
                   }`}
                 >
                   {/* Rank & User */}
@@ -111,12 +111,12 @@ export const LeaderboardPage = () => {
                     </div>
 
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-2xl bg-brand-100 text-brand-700 font-black flex items-center justify-center text-sm border border-brand-200">
+                      <div className="w-10 h-10 rounded-2xl bg-brand-100 dark:bg-brand-900/40 text-brand-700 dark:text-brand-300 font-black flex items-center justify-center text-sm border border-brand-200 dark:border-brand-700">
                         {item.displayName?.charAt(0).toUpperCase() || 'G'}
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
-                          <h4 className="font-extrabold text-slate-800 text-sm md:text-base">
+                          <h4 className="font-extrabold text-slate-800 dark:text-slate-100 text-sm md:text-base">
                             {item.displayName}
                           </h4>
                           {isCurrentUser && (

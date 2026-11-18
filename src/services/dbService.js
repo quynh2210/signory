@@ -95,8 +95,29 @@ export const seedInitialDataToFirestore = async (force = false) => {
 };
 
 /**
+ * Sanitize object for Firestore (removes undefined values which cause setDoc to throw)
+ */
+export function sanitizeForFirestore(obj) {
+  if (!obj || typeof obj !== 'object') return obj;
+  if (Array.isArray(obj)) {
+    return obj.map(item => sanitizeForFirestore(item)).filter(item => item !== undefined);
+  }
+  const clean = {};
+  for (const [key, val] of Object.entries(obj)) {
+    if (val === undefined) continue;
+    if (val !== null && typeof val === 'object' && !(val instanceof Date)) {
+      clean[key] = sanitizeForFirestore(val);
+    } else {
+      clean[key] = val;
+    }
+  }
+  return clean;
+}
+
+/**
  * Fetch all lessons for a specific mode or all.
- * Priority: Firestore (source of truth) → localStorage custom → seed fallback only if Firestore fails completely
+ * Priority: Firestore (source of truth) → localStorage custom → seed fallback only if Firestore fails completely.
+ * Note: We query collection without orderBy so Firestore NEVER filters out lessons missing the 'order' field.
  */
 export const getLessons = async (mode = 'parents') => {
   let firestoreLessons = [];
@@ -104,8 +125,7 @@ export const getLessons = async (mode = 'parents') => {
 
   try {
     const lessonsRef = collection(db, LESSONS_COL);
-    const q = query(lessonsRef, orderBy('order', 'asc'));
-    const snap = await getDocs(q);
+    const snap = await getDocs(lessonsRef);
     snap.forEach(docSnap => {
       firestoreLessons.push({ id: docSnap.id, ...docSnap.data() });
     });
@@ -131,10 +151,14 @@ export const getLessons = async (mode = 'parents') => {
     allLessons = Array.from(mergedMap.values());
   }
 
-  allLessons.sort((a, b) => (a.order || 0) - (b.order || 0));
+  allLessons.sort((a, b) => {
+    const orderA = typeof a.order === 'number' ? a.order : (Number(a.order) || 999);
+    const orderB = typeof b.order === 'number' ? b.order : (Number(b.order) || 999);
+    return orderA - orderB;
+  });
 
   if (mode === 'admin') return allLessons;
-  return allLessons.filter(l => l.isPublished && (l.mode === mode || l.mode === 'both'));
+  return allLessons.filter(l => l.isPublished !== false && (l.mode === mode || l.mode === 'both' || !l.mode));
 };
 
 /**
@@ -471,16 +495,16 @@ export const getLeaderboard = async () => {
 export const saveLessonAdmin = async (lessonData) => {
   try {
     const lessonId = lessonData.id || `lesson-${Date.now()}`;
-    const payload = {
+    const payload = sanitizeForFirestore({
       ...lessonData,
       id: lessonId,
-      updatedAt: new Date().toISOString()
-    };
-    if (!lessonData.createdAt) {
-      payload.createdAt = new Date().toISOString();
-    }
+      order: typeof lessonData.order === 'number' ? lessonData.order : (Number(lessonData.order) || 999),
+      isPublished: lessonData.isPublished !== false,
+      updatedAt: new Date().toISOString(),
+      createdAt: lessonData.createdAt || new Date().toISOString()
+    });
 
-    // Save to local custom lessons
+    // Save to local custom lessons for offline cache
     const local = getLocalCustomLessons();
     const idx = local.findIndex(l => l.id === lessonId);
     if (idx >= 0) {
@@ -490,11 +514,12 @@ export const saveLessonAdmin = async (lessonData) => {
     }
     saveLocalCustomLessons(local);
 
-    // Save to Firestore
-    setDoc(doc(db, LESSONS_COL, lessonId), payload, { merge: true }).catch(() => {});
+    // Save to Firestore and await
+    await setDoc(doc(db, LESSONS_COL, lessonId), payload, { merge: true });
     return { success: true, id: lessonId };
   } catch (error) {
-    return { success: true, id: lessonData.id };
+    console.error('saveLessonAdmin error:', error);
+    throw error;
   }
 };
 
@@ -504,7 +529,11 @@ export const saveLessonAdmin = async (lessonData) => {
 export const deleteLessonAdmin = async (lessonId) => {
   const local = getLocalCustomLessons().filter(l => l.id !== lessonId);
   saveLocalCustomLessons(local);
-  deleteDoc(doc(db, LESSONS_COL, lessonId)).catch(() => {});
+  try {
+    await deleteDoc(doc(db, LESSONS_COL, lessonId));
+  } catch (e) {
+    console.warn('deleteLessonAdmin error:', e);
+  }
   return { success: true };
 };
 
@@ -517,14 +546,17 @@ export const saveLessonBlocksAdmin = async (lessonId, blocks) => {
     for (let i = 0; i < blocks.length; i++) {
       const block = blocks[i];
       const blockId = block.id || `block-${lessonId}-${Date.now()}-${i}`;
-      setDoc(doc(db, BLOCKS_COL, blockId), {
+      const payload = sanitizeForFirestore({
         ...block,
         id: blockId,
         lessonId,
         order: i + 1
-      }, { merge: true }).catch(() => {});
+      });
+      await setDoc(doc(db, BLOCKS_COL, blockId), payload, { merge: true });
     }
-  } catch (e) {}
+  } catch (e) {
+    console.warn('saveLessonBlocksAdmin error:', e);
+  }
   return { success: true };
 };
 
@@ -533,7 +565,11 @@ export const saveLessonBlocksAdmin = async (lessonId, blocks) => {
  */
 export const saveQuestionAdmin = async (questionData) => {
   const qId = questionData.id || `q-${Date.now()}`;
-  const payload = { ...questionData, id: qId, updatedAt: new Date().toISOString() };
+  const payload = sanitizeForFirestore({
+    ...questionData,
+    id: qId,
+    updatedAt: new Date().toISOString()
+  });
   
   if (questionData.lessonId) {
     const key = `signory_questions_${questionData.lessonId}`;
@@ -544,7 +580,11 @@ export const saveQuestionAdmin = async (questionData) => {
     localStorage.setItem(key, JSON.stringify(existing));
   }
 
-  setDoc(doc(db, QUESTIONS_COL, qId), payload, { merge: true }).catch(() => {});
+  try {
+    await setDoc(doc(db, QUESTIONS_COL, qId), payload, { merge: true });
+  } catch (e) {
+    console.warn('saveQuestionAdmin error:', e);
+  }
   return { success: true, id: qId };
 };
 
@@ -619,9 +659,10 @@ export const saveAppSettings = async (settings) => {
  */
 export const getStories = async () => {
   try {
-    const q = query(collection(db, STORIES_COL), orderBy('order', 'asc'));
-    const snap = await getDocs(q);
-    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const snap = await getDocs(collection(db, STORIES_COL));
+    const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    list.sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0));
+    return list;
   } catch (e) {
     console.warn('getStories error:', e.message);
     return [];
@@ -629,8 +670,14 @@ export const getStories = async () => {
 };
 
 export const saveStory = async (story) => {
+  const clean = sanitizeForFirestore({
+    ...story,
+    order: Number(story.order) || 1,
+    isPublished: story.isPublished !== false,
+    updatedAt: new Date().toISOString()
+  });
   const ref = doc(db, STORIES_COL, story.id);
-  await setDoc(ref, { ...story, updatedAt: new Date().toISOString() }, { merge: true });
+  await setDoc(ref, clean, { merge: true });
   return { success: true };
 };
 
@@ -645,17 +692,18 @@ export const deleteStory = async (storyId) => {
 };
 
 /**
- * Get chapters for a story, ordered
+ * Get chapters for a story, ordered in JavaScript memory (No composite index required!)
  */
 export const getChapters = async (storyId) => {
   try {
     const q = query(
       collection(db, CHAPTERS_COL),
-      where('storyId', '==', storyId),
-      orderBy('order', 'asc')
+      where('storyId', '==', storyId)
     );
     const snap = await getDocs(q);
-    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    list.sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0));
+    return list;
   } catch (e) {
     console.warn('getChapters error:', e.message);
     return [];
@@ -664,17 +712,24 @@ export const getChapters = async (storyId) => {
 
 export const getAllChapters = async () => {
   try {
-    const q = query(collection(db, CHAPTERS_COL), orderBy('order', 'asc'));
-    const snap = await getDocs(q);
-    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const snap = await getDocs(collection(db, CHAPTERS_COL));
+    const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    list.sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0));
+    return list;
   } catch (e) {
     return [];
   }
 };
 
 export const saveChapter = async (chapter) => {
+  const clean = sanitizeForFirestore({
+    ...chapter,
+    order: Number(chapter.order) || 1,
+    isPublished: chapter.isPublished !== false,
+    updatedAt: new Date().toISOString()
+  });
   const ref = doc(db, CHAPTERS_COL, chapter.id);
-  await setDoc(ref, { ...chapter, updatedAt: new Date().toISOString() }, { merge: true });
+  await setDoc(ref, clean, { merge: true });
   return { success: true };
 };
 
@@ -684,17 +739,18 @@ export const deleteChapter = async (chapterId) => {
 };
 
 /**
- * Get lessons belonging to a chapter
+ * Get lessons belonging to a chapter (No composite index required!)
  */
 export const getLessonsByChapter = async (chapterId) => {
   try {
     const q = query(
       collection(db, LESSONS_COL),
-      where('chapterId', '==', chapterId),
-      orderBy('order', 'asc')
+      where('chapterId', '==', chapterId)
     );
     const snap = await getDocs(q);
-    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    list.sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0));
+    return list;
   } catch (e) {
     console.warn('getLessonsByChapter error:', e.message);
     return [];

@@ -153,22 +153,22 @@ export const LessonPlayerPage = () => {
     : 0;
 
   return (
-    <div className={`min-h-screen flex flex-col justify-between ${
-      isKidsMode ? 'bg-gradient-to-b from-sky-50 via-purple-50 to-pink-50' : 'bg-white'
+    <div className={`min-h-screen flex flex-col justify-between transition-colors duration-300 ${
+      isKidsMode ? 'bg-gradient-to-b from-sky-50 via-purple-50 to-pink-50 dark:from-slate-950 dark:via-purple-950/30 dark:to-slate-900' : 'bg-white dark:bg-slate-900'
     }`}>
       {/* Top Header / Progress Bar */}
       <div className="max-w-4xl w-full mx-auto px-4 py-4 flex items-center justify-between gap-4">
         {/* Exit Button */}
         <button
           onClick={handleExit}
-          className="p-2.5 rounded-2xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all"
+          className="p-2.5 rounded-2xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
           title="Thoát bài học"
         >
           <X className="w-6 h-6" />
         </button>
 
         {/* Progress Bar */}
-        <div className="flex-1 bg-slate-100 h-4 md:h-5 rounded-full overflow-hidden p-0.5 border border-slate-200 shadow-inner flex items-center">
+        <div className="flex-1 bg-slate-100 dark:bg-slate-800 h-4 md:h-5 rounded-full overflow-hidden p-0.5 border border-slate-200 dark:border-slate-700 shadow-inner flex items-center">
           <motion.div
             className={`h-full rounded-full transition-all ${
               isKidsMode
@@ -184,7 +184,7 @@ export const LessonPlayerPage = () => {
         {/* Audio Toggle */}
         <button
           onClick={toggleSound}
-          className="p-2.5 rounded-2xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all"
+          className="p-2.5 rounded-2xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
           title={soundEnabled ? 'Tắt âm thanh' : 'Bật âm thanh'}
         >
           {soundEnabled ? (

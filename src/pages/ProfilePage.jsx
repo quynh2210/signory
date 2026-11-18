@@ -132,8 +132,8 @@ export const ProfilePage = () => {
               key={badge.id}
               className={`p-4 rounded-2xl border-2 transition-all flex items-start gap-3.5 ${
                 badge.isEarned
-                  ? 'bg-gradient-to-br from-amber-50 to-yellow-50 border-amber-300 shadow-sm'
-                  : 'bg-slate-50 border-slate-200 opacity-55'
+                  ? 'bg-gradient-to-br from-amber-50 to-yellow-50 dark:from-amber-950/40 dark:to-yellow-950/30 border-amber-300 dark:border-amber-600/50 shadow-sm'
+                  : 'bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 opacity-55'
               }`}
             >
               <div className={`w-14 h-14 rounded-2xl p-1.5 flex items-center justify-center shrink-0 transition-all ${
@@ -143,13 +143,13 @@ export const ProfilePage = () => {
               </div>
               <div className="space-y-1">
                 <div className="flex items-center gap-1.5">
-                  <h4 className="font-extrabold text-slate-800 text-sm">{badge.name}</h4>
+                  <h4 className="font-extrabold text-slate-800 dark:text-slate-100 text-sm">{badge.name}</h4>
                   {badge.isEarned && (
                     <CheckCircle2 className="w-4 h-4 text-emerald-500 stroke-[3]" />
                   )}
                 </div>
-                <p className="text-xs text-slate-500 font-medium">{badge.description}</p>
-                <span className="inline-block text-[10px] font-bold text-amber-700 bg-amber-100/70 px-2 py-0.5 rounded-md mt-1">
+                <p className="text-xs text-slate-500 dark:text-slate-300 font-medium">{badge.description}</p>
+                <span className="inline-block text-[10px] font-bold text-amber-700 dark:text-amber-300 bg-amber-100/70 dark:bg-amber-900/50 px-2 py-0.5 rounded-md mt-1">
                   {badge.condition}
                 </span>
               </div>
@@ -159,9 +159,9 @@ export const ProfilePage = () => {
       </div>
 
       {/* Daily Goal & Preferences Settings */}
-      <div className="bg-white rounded-[32px] p-6 md:p-8 border-2 border-slate-100 shadow-sm space-y-4">
-        <h3 className="text-xl font-black text-slate-800">Cài Đặt Mục Tiêu Mỗi Ngày</h3>
-        <p className="text-sm text-slate-500 font-semibold">
+      <div className="bg-white dark:bg-slate-800 rounded-[32px] p-6 md:p-8 border-2 border-slate-100 dark:border-slate-700 shadow-sm space-y-4">
+        <h3 className="text-xl font-black text-slate-800 dark:text-slate-100">Cài Đặt Mục Tiêu Mỗi Ngày</h3>
+        <p className="text-sm text-slate-500 dark:text-slate-400 font-semibold">
           Duy trì thói quen học 3 phút mỗi ngày cùng cuốn sách truyện tranh ký hiệu.
         </p>
 
@@ -178,8 +178,8 @@ export const ProfilePage = () => {
               onClick={() => setDailyGoal(goalVal)}
               className={`px-5 py-3 rounded-2xl font-black text-sm border-2 transition-all ${
                 Number(dailyGoal) === goalVal
-                  ? 'border-brand-500 bg-brand-50 text-brand-900 shadow-sm ring-2 ring-brand-200'
-                  : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                  ? 'border-brand-500 bg-brand-50 dark:bg-brand-950/50 text-brand-900 dark:text-brand-200 shadow-sm ring-2 ring-brand-200 dark:ring-brand-800'
+                  : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600'
               }`}
             >
               {goalVal} EXP / ngày

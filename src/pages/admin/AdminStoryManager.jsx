@@ -92,11 +92,17 @@ export const AdminStoryManager = () => {
   const handleSaveStory = async () => {
     if (!storyForm?.title.trim()) return alert('Vui lòng nhập tên câu chuyện.');
     setSaving(true);
-    await saveStory(storyForm);
-    playCorrect();
-    setStoryForm(null);
-    await loadStories();
-    setSaving(false);
+    try {
+      await saveStory(storyForm);
+      playCorrect();
+      setStoryForm(null);
+      await loadStories();
+    } catch (err) {
+      console.error(err);
+      alert('Lỗi lưu câu chuyện: ' + err.message);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleDeleteStory = async (storyId) => {
@@ -145,11 +151,17 @@ export const AdminStoryManager = () => {
   const handleSaveChapter = async () => {
     if (!chapterForm?.title.trim()) return alert('Vui lòng nhập tên chương.');
     setSaving(true);
-    await saveChapter(chapterForm);
-    playCorrect();
-    setChapterForm(null);
-    await loadChapters(selectedStory.id);
-    setSaving(false);
+    try {
+      await saveChapter(chapterForm);
+      playCorrect();
+      setChapterForm(null);
+      await loadChapters(selectedStory.id);
+    } catch (err) {
+      console.error(err);
+      alert('Lỗi lưu chương: ' + err.message);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleDeleteChapter = async (chapterId) => {

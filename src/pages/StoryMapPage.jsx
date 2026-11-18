@@ -196,11 +196,8 @@ export const StoryMapPage = () => {
 
         {/* Chapters */}
         {chapters.length === 0 ? (
-          <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-3xl">
-            <p className="text-slate-400 dark:text-slate-500 font-semibold">Câu chuyện này chưa có chương nào.</p>
-            <Link to="/admin/stories" className="mt-4 inline-block text-purple-600 dark:text-purple-400 font-black text-sm hover:underline">
-              Thêm chương trong Admin →
-            </Link>
+          <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-3xl border border-slate-100 dark:border-gray-700">
+            <p className="text-slate-400 dark:text-slate-500 font-semibold">Câu chuyện này hiện chưa có chương nào.</p>
           </div>
         ) : (
           <div className="space-y-4">
