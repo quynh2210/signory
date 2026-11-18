@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   BookOpen, Plus, Trash2, Edit3, Save, X, ChevronRight,
   Loader2, Sparkles, Image as ImageIcon, Upload, GripVertical,
-  Layers, BookMarked, ArrowLeft
+  Layers, BookMarked, ArrowLeft, Lock, Unlock
 } from 'lucide-react';
 import {
   getStories, saveStory, deleteStory,
@@ -140,12 +140,50 @@ export const AdminStoryManager = () => {
   const handleNewChapter = () => {
     playClick();
     if (!selectedStory) return alert('Hãy chọn câu chuyện trước.');
-    setChapterForm({ id: genId('chapter'), storyId: selectedStory.id, title: '', description: '', order: chapters.length + 1, isPublished: true });
+    setChapterForm({ 
+      id: genId('chapter'), 
+      storyId: selectedStory.id, 
+      title: '', 
+      description: '', 
+      order: chapters.length + 1, 
+      isPublished: true,
+      isLockedByDefault: chapters.length > 0
+    });
   };
 
   const handleEditChapter = (chapter) => {
     playClick();
     setChapterForm({ ...chapter });
+  };
+
+  const handleToggleChapterLock = async (chapter) => {
+    setSaving(true);
+    try {
+      const updated = { ...chapter, isLockedByDefault: !chapter.isLockedByDefault };
+      await saveChapter(updated);
+      playCorrect();
+      if (selectedStory) await loadChapters(selectedStory.id);
+    } catch (err) {
+      alert('Lỗi cập nhật trạng thái khóa: ' + err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleToggleLessonLock = async (lesson) => {
+    setSaving(true);
+    try {
+      const updated = { ...lesson, isLockedByDefault: !lesson.isLockedByDefault };
+      await saveLessonAdmin(updated);
+      playCorrect();
+      if (selectedChapter) await loadChapterLessons(selectedChapter.id);
+      const ls = await getLessons();
+      setAllLessons(ls);
+    } catch (err) {
+      alert('Lỗi cập nhật trạng thái khóa bài học: ' + err.message);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleSaveChapter = async () => {
@@ -409,10 +447,19 @@ export const AdminStoryManager = () => {
                       className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-pink-400"
                     />
                   </div>
-                  <div className="flex items-center gap-2">
-                    <input type="checkbox" id="chapterPublished" checked={chapterForm.isPublished}
-                      onChange={e => setChapterForm(p => ({ ...p, isPublished: e.target.checked }))} />
-                    <label htmlFor="chapterPublished" className="text-xs font-black text-slate-600">Công khai</label>
+                  <div className="flex flex-wrap items-center gap-4">
+                    <div className="flex items-center gap-2">
+                      <input type="checkbox" id="chapterPublished" checked={chapterForm.isPublished}
+                        onChange={e => setChapterForm(p => ({ ...p, isPublished: e.target.checked }))} />
+                      <label htmlFor="chapterPublished" className="text-xs font-black text-slate-600">Công khai</label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input type="checkbox" id="chapterLocked" checked={chapterForm.isLockedByDefault || false}
+                        onChange={e => setChapterForm(p => ({ ...p, isLockedByDefault: e.target.checked }))} />
+                      <label htmlFor="chapterLocked" className="text-xs font-black text-amber-700 flex items-center gap-1 cursor-pointer">
+                        <Lock className="w-3 h-3" /> Khóa mặc định (Cần học xong chương trước)
+                      </label>
+                    </div>
                   </div>
                   <div className="flex gap-2">
                     <button onClick={handleSaveChapter} disabled={saving}
@@ -442,9 +489,25 @@ export const AdminStoryManager = () => {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-black text-slate-800 text-sm truncate">{ch.title}</p>
-                      <p className="text-xs text-slate-400 font-semibold">{ch.isPublished ? '✅ Công khai' : '🔒 Ẩn'}</p>
+                      <p className="text-xs text-slate-400 font-semibold flex items-center gap-2">
+                        <span>{ch.isPublished ? '✅ Công khai' : '🔒 Ẩn'}</span>
+                        <span className={ch.isLockedByDefault ? 'text-amber-600 font-bold' : 'text-emerald-600 font-bold'}>
+                          {ch.isLockedByDefault ? '• 🔒 Khóa theo tiến độ' : '• 🔓 Mở tự do'}
+                        </span>
+                      </p>
                     </div>
-                    <div className="flex gap-1 shrink-0">
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button 
+                        onClick={e => { e.stopPropagation(); handleToggleChapterLock(ch); }}
+                        className={`p-1.5 rounded-lg transition-all flex items-center gap-1 text-xs font-bold ${
+                          ch.isLockedByDefault 
+                            ? 'bg-amber-100 text-amber-700 hover:bg-amber-200' 
+                            : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+                        }`}
+                        title={ch.isLockedByDefault ? 'Đang khóa mặc định (Bấm để mở tự do)' : 'Đang mở (Bấm để khóa theo tiến độ)'}
+                      >
+                        {ch.isLockedByDefault ? <Lock className="w-3.5 h-3.5 text-amber-600" /> : <Unlock className="w-3.5 h-3.5 text-emerald-600" />}
+                      </button>
                       <button onClick={e => { e.stopPropagation(); handleEditChapter(ch); }}
                         className="p-1.5 hover:bg-pink-200 text-pink-600 rounded-lg transition-all">
                         <Edit3 className="w-3.5 h-3.5" />
@@ -482,6 +545,22 @@ export const AdminStoryManager = () => {
                       <div key={lesson.id} className="flex items-center gap-2 p-2.5 bg-blue-50 rounded-xl border border-blue-100">
                         <BookOpen className="w-4 h-4 text-blue-500 shrink-0" />
                         <span className="text-sm font-black text-slate-700 flex-1 truncate">{lesson.title}</span>
+                        <button
+                          onClick={() => handleToggleLessonLock(lesson)}
+                          disabled={saving}
+                          className={`p-1.5 rounded-lg transition-all flex items-center gap-1 text-xs font-bold shrink-0 ${
+                            lesson.isLockedByDefault
+                              ? 'bg-amber-100 text-amber-700 hover:bg-amber-200'
+                              : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+                          }`}
+                          title={lesson.isLockedByDefault ? 'Đang khóa (Bấm để mở tự do)' : 'Đang mở (Bấm để khóa theo tiến độ)'}
+                        >
+                          {lesson.isLockedByDefault ? (
+                            <Lock className="w-3.5 h-3.5 text-amber-600" />
+                          ) : (
+                            <Unlock className="w-3.5 h-3.5 text-emerald-600" />
+                          )}
+                        </button>
                         <button
                           onClick={() => handleRemoveLessonFromChapter(lesson)}
                           disabled={saving}

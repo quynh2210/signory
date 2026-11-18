@@ -224,16 +224,25 @@ export const getLessonDetails = async (lessonId) => {
  * Fetch user progress for all lessons (Dual-layer: LocalStorage + Firestore)
  */
 export const getUserProgress = async (uid) => {
-  if (!uid) return {};
-  const localProgress = JSON.parse(localStorage.getItem(`signory_progress_${uid}`) || '{}');
+  const effectiveUid = uid || 'guest';
+  const localProgress = JSON.parse(localStorage.getItem(`signory_progress_${effectiveUid}`) || '{}');
+
+  if (effectiveUid === 'guest') {
+    return localProgress;
+  }
 
   try {
-    const q = query(collection(db, PROGRESS_COL), where('uid', '==', uid));
+    const q = query(collection(db, PROGRESS_COL), where('uid', '==', effectiveUid));
     const snap = await getDocs(q);
     const progressMap = { ...localProgress };
     snap.forEach(docSnap => {
       const data = docSnap.data();
-      progressMap[data.lessonId] = { ...progressMap[data.lessonId], ...data };
+      progressMap[data.lessonId] = {
+        ...progressMap[data.lessonId],
+        ...data,
+        completed: true,
+        status: 'completed'
+      };
     });
     return progressMap;
   } catch (error) {
@@ -254,7 +263,7 @@ export const saveLessonProgress = async ({
   lessonRewardPoints = 50,
   nextLessonId = null
 }) => {
-  if (!uid) return { success: false, error: 'User not authenticated' };
+  const effectiveUid = uid || 'guest';
 
   // Calculate stars: 100% -> 3 stars, >= 65% -> 2 stars, otherwise 1 star
   const accuracy = totalQuestions > 0 ? correctAnswers / totalQuestions : 1;
@@ -263,7 +272,7 @@ export const saveLessonProgress = async ({
   else if (accuracy >= 0.65) stars = 2;
 
   // 1. Read existing local progress
-  const localProgressMap = JSON.parse(localStorage.getItem(`signory_progress_${uid}`) || '{}');
+  const localProgressMap = JSON.parse(localStorage.getItem(`signory_progress_${effectiveUid}`) || '{}');
   const existingProg = localProgressMap[lessonId];
   const isFirstTime = !existingProg || existingProg.status !== 'completed';
 
@@ -279,10 +288,11 @@ export const saveLessonProgress = async ({
   const finalStars = Math.max(stars, existingProg?.stars || 0);
 
   const progressRecord = {
-    progressId: `${uid}_${lessonId}`,
-    uid,
+    progressId: `${effectiveUid}_${lessonId}`,
+    uid: effectiveUid,
     lessonId,
     status: 'completed',
+    completed: true,
     score,
     stars: finalStars,
     correctAnswers,
@@ -292,56 +302,61 @@ export const saveLessonProgress = async ({
 
   // 2. Persist progress to LocalStorage immediately!
   localProgressMap[lessonId] = progressRecord;
-  localStorage.setItem(`signory_progress_${uid}`, JSON.stringify(localProgressMap));
+  localStorage.setItem(`signory_progress_${effectiveUid}`, JSON.stringify(localProgressMap));
 
   // 3. Update User Profile in LocalStorage immediately!
-  const localProfile = JSON.parse(localStorage.getItem(`signory_user_${uid}`) || '{}');
+  const localProfile = JSON.parse(localStorage.getItem(`signory_user_${effectiveUid}`) || '{}');
   const newExp = (localProfile.totalExp || 0) + xpGained;
   const newStars = (localProfile.totalStars || 0) + (isFirstTime ? finalStars : Math.max(0, finalStars - (existingProg?.stars || 0)));
   const completedLessons = Array.from(new Set([...(localProfile.completedLessons || []), lessonId]));
 
   const updatedProfile = {
     ...localProfile,
-    uid,
+    uid: effectiveUid,
     totalExp: newExp,
     totalStars: newStars,
     completedLessons,
     lastActiveAt: new Date().toISOString()
   };
-  localStorage.setItem(`signory_user_${uid}`, JSON.stringify(updatedProfile));
+  localStorage.setItem(`signory_user_${effectiveUid}`, JSON.stringify(updatedProfile));
 
   // 4. Dispatch instant event so AuthContext updates state in Navbar, Profile, Map!
   window.dispatchEvent(new CustomEvent('signory_user_updated', {
     detail: {
-      uid,
+      uid: effectiveUid,
       totalExp: newExp,
       totalStars: newStars,
       completedLessons
     }
   }));
 
-  // 5. Evaluate Badges
-  const newlyAwardedBadges = await evaluateBadges(uid, {
-    lessonId,
-    stars: finalStars,
-    isFirstTime,
-    totalCorrect: correctAnswers
-  });
+  // 5. Evaluate Badges (if authenticated)
+  let newlyAwardedBadges = [];
+  if (effectiveUid !== 'guest') {
+    newlyAwardedBadges = await evaluateBadges(effectiveUid, {
+      lessonId,
+      stars: finalStars,
+      isFirstTime,
+      totalCorrect: correctAnswers
+    });
+  }
 
   // 6. Attempt Firestore background sync (fails gracefully if restricted)
-  try {
-    const progressRef = doc(db, PROGRESS_COL, `${uid}_${lessonId}`);
-    setDoc(progressRef, { ...progressRecord, updatedAt: serverTimestamp() }, { merge: true }).catch(() => {});
+  if (effectiveUid !== 'guest') {
+    try {
+      const progressRef = doc(db, PROGRESS_COL, `${effectiveUid}_${lessonId}`);
+      setDoc(progressRef, { ...progressRecord, updatedAt: serverTimestamp() }, { merge: true }).catch(() => {});
 
-    const userRef = doc(db, USERS_COL, uid);
-    updateDoc(userRef, {
-      totalExp: newExp,
-      totalStars: newStars,
-      completedLessons,
-      lastActiveAt: new Date().toISOString()
-    }).catch(() => {});
-  } catch (e) {
-    console.warn('Firestore progress sync note (Local save successful):', e);
+      const userRef = doc(db, USERS_COL, effectiveUid);
+      updateDoc(userRef, {
+        totalExp: newExp,
+        totalStars: newStars,
+        completedLessons,
+        lastActiveAt: new Date().toISOString()
+      }).catch(() => {});
+    } catch (e) {
+      console.warn('Firestore progress sync note (Local save successful):', e);
+    }
   }
 
   return {
@@ -773,9 +788,9 @@ export const seedTamCamStory = async () => {
   };
 
   const chapters = [
-    { id: 'chapter-tc-1', storyId, title: 'Khởi Đầu Câu Chuyện', description: 'Gặp gỡ nhân vật và làm quen với các ký hiệu đầu tiên.', order: 1, isPublished: true },
-    { id: 'chapter-tc-2', storyId, title: 'Khám Phá Cổ Tích', description: 'Theo chân Tấm qua những thử thách và phép màu.', order: 2, isPublished: true },
-    { id: 'chapter-tc-3', storyId, title: 'Kết Nối Yêu Thương', description: 'Học ký hiệu về tình cảm gia đình và hạnh phúc.', order: 3, isPublished: true },
+    { id: 'chapter-tc-1', storyId, title: 'Khởi Đầu Câu Chuyện', description: 'Gặp gỡ nhân vật và làm quen với các ký hiệu đầu tiên.', order: 1, isPublished: true, isLockedByDefault: false },
+    { id: 'chapter-tc-2', storyId, title: 'Khám Phá Cổ Tích', description: 'Theo chân Tấm qua những thử thách và phép màu.', order: 2, isPublished: true, isLockedByDefault: true },
+    { id: 'chapter-tc-3', storyId, title: 'Kết Nối Yêu Thương', description: 'Học ký hiệu về tình cảm gia đình và hạnh phúc.', order: 3, isPublished: true, isLockedByDefault: true },
   ];
 
   const lessons = [

@@ -49,17 +49,33 @@ export const ImageSelectionQuestion = ({
       </div>
 
       {/* Demonstration image/video if provided */}
-      {question.questionImage && (
-        <div className="flex justify-center">
-          <div className="rounded-3xl overflow-hidden border-4 border-yellow-300 shadow-md max-w-xs w-full bg-white p-2">
-            <img 
-              src={question.questionImage} 
-              alt="Minh họa ký hiệu" 
-              className="w-full h-48 object-cover rounded-2xl"
-            />
+      {(question.questionImage || question.questionVideo) && (() => {
+        const mediaUrl = question.questionVideo || question.questionImage;
+        const isVideo = mediaUrl.match(/\.(mp4|webm|mov|ogg)($|\?)/i) || mediaUrl.includes('/video/upload/');
+        return (
+          <div className="flex justify-center">
+            <div className="rounded-3xl overflow-hidden border-4 border-yellow-300 shadow-md max-w-xs w-full bg-white p-2">
+              {isVideo ? (
+                <video 
+                  src={mediaUrl} 
+                  controls 
+                  autoPlay 
+                  loop 
+                  muted 
+                  playsInline
+                  className="w-full h-48 object-cover rounded-2xl bg-black"
+                />
+              ) : (
+                <img 
+                  src={mediaUrl} 
+                  alt="Minh họa ký hiệu" 
+                  className="w-full h-48 object-cover rounded-2xl"
+                />
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* 4 Image Choices Grid */}
       <div className="grid grid-cols-2 gap-4 md:gap-6 pt-2">

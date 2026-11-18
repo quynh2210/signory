@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { BookOpen, ChevronRight, Lock, Star, Sparkles, ArrowLeft, Loader2, Layers } from 'lucide-react';
+import { BookOpen, ChevronRight, Lock, Unlock, Star, Sparkles, ArrowLeft, Loader2, Layers, CheckCircle2 } from 'lucide-react';
 import {
   getStories,
   getChapters,
   getLessonsByChapter,
+  getUserProgress,
   seedTamCamStory
 } from '../services/dbService';
 import { useAuth } from '../context/AuthContext';
@@ -14,15 +15,29 @@ const PLACEHOLDER_COVER = 'https://images.unsplash.com/photo-1513694203232-719a2
 export const StoryMapPage = () => {
   const { storyId } = useParams();
   const navigate = useNavigate();
-  const { userProgress } = useAuth();
+  const { user, userProfile } = useAuth();
 
   const [stories, setStories] = useState([]);
   const [selectedStory, setSelectedStory] = useState(null);
   const [chapters, setChapters] = useState([]);
   const [lessonsByChapter, setLessonsByChapter] = useState({});
+  const [userProgressMap, setUserProgressMap] = useState({});
   const [loading, setLoading] = useState(true);
   const [seeding, setSeeding] = useState(false);
   const [expandedChapter, setExpandedChapter] = useState(null);
+
+  // Load progress for current user or guest
+  const loadProgress = async () => {
+    const p = await getUserProgress(user?.uid || 'guest');
+    setUserProgressMap(p || {});
+  };
+
+  useEffect(() => {
+    loadProgress();
+    const handleUpdate = () => loadProgress();
+    window.addEventListener('signory_user_updated', handleUpdate);
+    return () => window.removeEventListener('signory_user_updated', handleUpdate);
+  }, [user]);
 
   // Load stories on mount
   useEffect(() => {
@@ -79,16 +94,51 @@ export const StoryMapPage = () => {
     }
   };
 
-  const getLessonStatus = (lesson) => {
-    const progress = userProgress?.[lesson.id];
-    if (progress?.completed) return 'completed';
-    if (lesson.isLockedByDefault) return 'locked';
-    return 'available';
+  // Check if a specific lesson is completed
+  const isLessonCompleted = (lessonId) => {
+    const p = userProgressMap[lessonId];
+    return p?.status === 'completed' || p?.completed === true || userProfile?.completedLessons?.includes(lessonId);
   };
 
   const getStars = (lesson) => {
-    const progress = userProgress?.[lesson.id];
-    return progress?.stars || 0;
+    const p = userProgressMap[lesson.id];
+    return p?.stars || 0;
+  };
+
+  // A chapter is completed if it has lessons and all of them are completed
+  const isChapterCompleted = (chapterId) => {
+    const lessons = lessonsByChapter[chapterId] || [];
+    if (lessons.length === 0) return false;
+    return lessons.every(l => isLessonCompleted(l.id));
+  };
+
+  // Chapter unlock logic: Chapter 1 is default unlocked. Next chapters unlock when previous chapter completes or if admin unlocked it!
+  const isChapterUnlocked = (ch, idx) => {
+    if (ch.isLockedByDefault === false) return true; // Admin đã chủ động mở khóa
+    if (ch.isLockedByDefault === true && idx === 0) return false; // Admin chủ động khóa chương 1
+    if (idx === 0) return true; // Chương 1 mở theo mặc định
+    const prevCh = chapters[idx - 1];
+    if (!prevCh) return true;
+    return isChapterCompleted(prevCh.id);
+  };
+
+  // Lesson unlock logic: Lesson 1 in chapter is default open, next lessons open when previous lesson completes!
+  const isLessonUnlocked = (lesson, lIdx, chapterUnlocked, chapterLessons) => {
+    if (!chapterUnlocked) return false;
+    if (isLessonCompleted(lesson.id)) return true; // Đã hoàn thành thì xem lại thoải mái
+    if (lesson.isLockedByDefault === false) return true; // Admin mở khóa
+    if (lesson.isLockedByDefault === true && lIdx === 0) return false; // Admin khóa bài 1
+    if (lIdx === 0) return true; // Bài 1 trong chương mở theo mặc định
+    const prevLesson = chapterLessons[lIdx - 1];
+    return isLessonCompleted(prevLesson?.id);
+  };
+
+  const handleToggleExpandChapter = (chapterId, unlocked, chIdx) => {
+    if (!unlocked) {
+      alert(`Chương ${chIdx + 1} đang bị khóa. Bạn hãy hoàn thành tất cả các bài của Chương ${chIdx} trước để mở khóa nhé!`);
+      return;
+    }
+    setExpandedChapter(expandedChapter === chapterId ? null : chapterId);
   };
 
   if (loading) {
@@ -204,41 +254,86 @@ export const StoryMapPage = () => {
             {chapters.map((chapter, chIdx) => {
               const lessons = lessonsByChapter[chapter.id] || [];
               const isExpanded = expandedChapter === chapter.id;
-
-              const completedCount = lessons.filter(l => userProgress?.[l.id]?.completed).length;
+              const chUnlocked = isChapterUnlocked(chapter, chIdx);
+              const chCompleted = isChapterCompleted(chapter.id);
+              const completedCount = lessons.filter(l => isLessonCompleted(l.id)).length;
 
               return (
-                <div key={chapter.id} className="bg-white dark:bg-gray-800 rounded-3xl shadow-sm border border-slate-100 dark:border-gray-700 overflow-hidden">
+                <div 
+                  key={chapter.id} 
+                  className={`bg-white dark:bg-gray-800 rounded-3xl shadow-sm border transition-all overflow-hidden ${
+                    !chUnlocked 
+                      ? 'border-slate-200 dark:border-gray-700 opacity-70' 
+                      : chCompleted
+                      ? 'border-emerald-300 dark:border-emerald-700/60 ring-1 ring-emerald-200 dark:ring-emerald-800/40'
+                      : 'border-slate-100 dark:border-gray-700'
+                  }`}
+                >
                   {/* Chapter Header */}
                   <button
-                    onClick={() => setExpandedChapter(isExpanded ? null : chapter.id)}
-                    className="w-full flex items-center gap-4 p-5 hover:bg-purple-50 dark:hover:bg-gray-700 transition-colors text-left"
+                    onClick={() => handleToggleExpandChapter(chapter.id, chUnlocked, chIdx)}
+                    className="w-full flex items-center gap-4 p-5 hover:bg-purple-50/60 dark:hover:bg-gray-700 transition-colors text-left"
                   >
-                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-black text-lg shrink-0 shadow-md">
-                      {chIdx + 1}
+                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-white font-black text-lg shrink-0 shadow-md ${
+                      !chUnlocked
+                        ? 'bg-slate-400 dark:bg-gray-600'
+                        : chCompleted
+                        ? 'bg-gradient-to-br from-emerald-500 to-green-600'
+                        : 'bg-gradient-to-br from-purple-500 to-pink-500'
+                    }`}>
+                      {!chUnlocked ? <Lock className="w-5 h-5" /> : (chCompleted ? <CheckCircle2 className="w-6 h-6 stroke-[2.5]" /> : chIdx + 1)}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h2 className="font-black text-slate-800 dark:text-white text-base">{chapter.title}</h2>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h2 className="font-black text-slate-800 dark:text-white text-base">{chapter.title}</h2>
+                        {!chUnlocked ? (
+                          <span className="text-[11px] font-black px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-gray-700 text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                            <Lock className="w-3 h-3" /> Khóa
+                          </span>
+                        ) : chCompleted ? (
+                          <span className="text-[11px] font-black px-2.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 flex items-center gap-1">
+                            ✓ Hoàn thành
+                          </span>
+                        ) : (
+                          <span className="text-[11px] font-black px-2.5 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300">
+                            Đang học
+                          </span>
+                        )}
+                      </div>
                       <p className="text-slate-400 dark:text-slate-500 text-xs font-semibold mt-0.5">{chapter.description}</p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <div className="text-xs font-black text-purple-600 dark:text-purple-400">
-                          {completedCount}/{lessons.length} bài hoàn thành
+                      
+                      <div className="flex items-center gap-2 mt-2">
+                        <div className={`text-xs font-black ${
+                          !chUnlocked 
+                            ? 'text-slate-400' 
+                            : chCompleted 
+                            ? 'text-emerald-600 dark:text-emerald-400' 
+                            : 'text-purple-600 dark:text-purple-400'
+                        }`}>
+                          {!chUnlocked 
+                            ? `Hoàn thành Chương ${chIdx} để mở khóa` 
+                            : `${completedCount}/${lessons.length} bài hoàn thành`
+                          }
                         </div>
-                        {lessons.length > 0 && (
+                        {lessons.length > 0 && chUnlocked && (
                           <div className="flex-1 h-1.5 bg-slate-100 dark:bg-gray-600 rounded-full overflow-hidden">
                             <div
-                              className="h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full transition-all"
+                              className={`h-full rounded-full transition-all ${
+                                chCompleted ? 'bg-emerald-500' : 'bg-gradient-to-r from-purple-500 to-pink-500'
+                              }`}
                               style={{ width: `${(completedCount / lessons.length) * 100}%` }}
                             />
                           </div>
                         )}
                       </div>
                     </div>
-                    <ChevronRight className={`w-5 h-5 text-slate-400 dark:text-slate-500 shrink-0 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                    {chUnlocked && (
+                      <ChevronRight className={`w-5 h-5 text-slate-400 dark:text-slate-500 shrink-0 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                    )}
                   </button>
 
-                  {/* Lessons */}
-                  {isExpanded && (
+                  {/* Lessons in Chapter */}
+                  {isExpanded && chUnlocked && (
                     <div className="border-t border-slate-100 dark:border-gray-700 p-4 space-y-3">
                       {lessons.length === 0 ? (
                         <p className="text-sm text-slate-400 dark:text-slate-500 font-semibold text-center py-4">
@@ -246,37 +341,37 @@ export const StoryMapPage = () => {
                         </p>
                       ) : (
                         lessons.map((lesson, lIdx) => {
-                          const status = getLessonStatus(lesson);
+                          const completed = isLessonCompleted(lesson.id);
+                          const unlocked = isLessonUnlocked(lesson, lIdx, chUnlocked, lessons);
                           const stars = getStars(lesson);
-                          const isLocked = status === 'locked';
 
                           return (
                             <button
                               key={lesson.id}
-                              onClick={() => !isLocked && navigate(`/lesson/${lesson.id}`)}
-                              disabled={isLocked}
+                              onClick={() => unlocked && navigate(`/lesson/${lesson.id}`)}
+                              disabled={!unlocked}
                               className={`w-full flex items-center gap-4 p-4 rounded-2xl border-2 transition-all text-left ${
-                                isLocked
+                                !unlocked
                                   ? 'border-slate-100 dark:border-gray-700 bg-slate-50 dark:bg-gray-750 opacity-60 cursor-not-allowed'
-                                  : status === 'completed'
-                                  ? 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 hover:border-green-300'
-                                  : 'border-purple-100 dark:border-purple-800 bg-purple-50 dark:bg-purple-900/20 hover:border-purple-300 hover:shadow-md'
+                                  : completed
+                                  ? 'border-green-300 dark:border-green-800 bg-green-50/70 dark:bg-green-900/20 hover:border-green-400'
+                                  : 'border-purple-200 dark:border-purple-800 bg-purple-50/70 dark:bg-purple-900/20 hover:border-purple-400 hover:shadow-md'
                               }`}
                             >
                               {/* Lesson number / status icon */}
                               <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm shrink-0 ${
-                                isLocked
+                                !unlocked
                                   ? 'bg-slate-200 dark:bg-gray-600 text-slate-400 dark:text-slate-500'
-                                  : status === 'completed'
-                                  ? 'bg-green-500 text-white'
-                                  : 'bg-purple-600 text-white'
+                                  : completed
+                                  ? 'bg-green-500 text-white shadow-sm'
+                                  : 'bg-purple-600 text-white shadow-sm'
                               }`}>
-                                {isLocked ? <Lock className="w-4 h-4" /> : lIdx + 1}
+                                {!unlocked ? <Lock className="w-4 h-4" /> : (completed ? '✓' : lIdx + 1)}
                               </div>
 
                               {/* Lesson info */}
                               <div className="flex-1 min-w-0">
-                                <h3 className={`font-black text-sm ${isLocked ? 'text-slate-400 dark:text-slate-500' : 'text-slate-800 dark:text-white'}`}>
+                                <h3 className={`font-black text-sm ${!unlocked ? 'text-slate-400 dark:text-slate-500' : 'text-slate-800 dark:text-white'}`}>
                                   {lesson.title}
                                 </h3>
                                 <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 truncate">{lesson.description}</p>
@@ -287,7 +382,7 @@ export const StoryMapPage = () => {
                               </div>
 
                               {/* Stars */}
-                              {status === 'completed' && (
+                              {completed && (
                                 <div className="flex gap-0.5 shrink-0">
                                   {[1, 2, 3].map(s => (
                                     <Star key={s} className={`w-4 h-4 ${s <= stars ? 'text-yellow-400 fill-yellow-400' : 'text-slate-300 dark:text-slate-600'}`} />

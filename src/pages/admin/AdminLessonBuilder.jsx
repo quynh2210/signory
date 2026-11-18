@@ -21,7 +21,9 @@ import {
   Baby,
   Split,
   Layers,
-  X
+  X,
+  Lock,
+  Unlock
 } from 'lucide-react';
 import { 
   getLessonDetails, 
@@ -61,6 +63,7 @@ export const AdminLessonBuilder = () => {
   const [uploadingBlockId, setUploadingBlockId] = useState(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadingThumbnail, setUploadingThumbnail] = useState(false);
+  const [uploadingQuestionMediaId, setUploadingQuestionMediaId] = useState(null);
   const thumbnailInputRef = useRef(null);
 
   // Load existing lesson if editing
@@ -325,6 +328,26 @@ export const AdminLessonBuilder = () => {
     }
   };
 
+  // Upload question demonstration media (image or video)
+  const handleUploadQuestionMedia = async (qId, file) => {
+    if (!file) return;
+    setUploadingQuestionMediaId(qId);
+    try {
+      const result = await uploadMediaToCloudinary(file, () => {});
+      playCorrect();
+      setQuestions(prev => prev.map(q => q.id === qId ? {
+        ...q,
+        questionImage: result.url,
+        questionVideo: result.resourceType === 'video' ? result.url : null
+      } : q));
+    } catch (err) {
+      playIncorrect();
+      alert(`Lỗi upload ảnh/video câu hỏi: ${err.message}`);
+    } finally {
+      setUploadingQuestionMediaId(null);
+    }
+  };
+
   // Auto split sentence for word arrangement
   const handleSplitSentence = (qId, sentence) => {
     if (!sentence) return;
@@ -585,6 +608,30 @@ export const AdminLessonBuilder = () => {
                     />
                   )}
                 </div>
+              </div>
+
+              {/* Status toggles */}
+              <div className="md:col-span-2 flex flex-wrap items-center gap-6 pt-2 border-t border-slate-100">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={lessonData.isPublished}
+                    onChange={(e) => setLessonData({ ...lessonData, isPublished: e.target.checked })}
+                    className="w-4 h-4 text-purple-600 rounded border-slate-300 focus:ring-purple-500"
+                  />
+                  <span className="text-sm font-black text-slate-700">Công khai bài học</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={lessonData.isLockedByDefault}
+                    onChange={(e) => setLessonData({ ...lessonData, isLockedByDefault: e.target.checked })}
+                    className="w-4 h-4 text-amber-600 rounded border-slate-300 focus:ring-amber-500"
+                  />
+                  <span className="text-sm font-black text-amber-700 flex items-center gap-1.5">
+                    <Lock className="w-4 h-4" /> Khóa bài học mặc định (Cần hoàn thành bài trước để mở)
+                  </span>
+                </label>
               </div>
             </div>
           </div>
@@ -1188,21 +1235,79 @@ export const AdminLessonBuilder = () => {
                                 </div>
                               </div>
 
-                              {/* Question demonstration image */}
+                              {/* Question demonstration image / video */}
                               <div>
                                 <label className="block text-xs font-black text-slate-500 mb-1">
                                   Ảnh/Video minh họa ký hiệu mẫu của câu hỏi
                                 </label>
-                                <input
-                                  type="text"
-                                  value={currentQ.questionImage || ''}
-                                  onChange={(e) => {
-                                    const val = e.target.value;
-                                    setQuestions(prev => prev.map(q => q.id === currentQ.id ? { ...q, questionImage: val } : q));
-                                  }}
-                                  placeholder="URL ảnh ký hiệu..."
-                                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-mono bg-white"
-                                />
+                                <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
+                                  <input
+                                    type="text"
+                                    value={currentQ.questionImage || currentQ.questionVideo || ''}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      const isVid = val.match(/\.(mp4|webm|mov|ogg)($|\?)/i) || val.includes('/video/upload/');
+                                      setQuestions(prev => prev.map(q => q.id === currentQ.id ? { 
+                                        ...q, 
+                                        questionImage: val,
+                                        questionVideo: isVid ? val : null
+                                      } : q));
+                                    }}
+                                    placeholder="Dán URL ảnh/video hoặc bấm nút tải lên..."
+                                    className="flex-1 px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-mono bg-white w-full"
+                                  />
+                                  <label className="px-3.5 py-2 bg-purple-100 hover:bg-purple-200 text-purple-700 font-black rounded-xl text-xs flex items-center gap-1.5 transition-all shrink-0 cursor-pointer border border-purple-200">
+                                    {uploadingQuestionMediaId === currentQ.id ? (
+                                      <>
+                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                        <span>Đang tải...</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Upload className="w-3.5 h-3.5" />
+                                        <span>Tải ảnh/video</span>
+                                      </>
+                                    )}
+                                    <input
+                                      type="file"
+                                      accept="image/*,video/*"
+                                      className="hidden"
+                                      disabled={uploadingQuestionMediaId === currentQ.id}
+                                      onChange={(e) => {
+                                        if (e.target.files?.[0]) {
+                                          handleUploadQuestionMedia(currentQ.id, e.target.files[0]);
+                                        }
+                                      }}
+                                    />
+                                  </label>
+                                </div>
+
+                                {/* Preview if media exists */}
+                                {(currentQ.questionImage || currentQ.questionVideo) && (() => {
+                                  const mediaUrl = currentQ.questionVideo || currentQ.questionImage;
+                                  const isVid = mediaUrl.match(/\.(mp4|webm|mov|ogg)($|\?)/i) || mediaUrl.includes('/video/upload/');
+                                  return (
+                                    <div className="mt-2 flex items-center gap-2 p-2 bg-slate-50 rounded-xl border border-slate-200">
+                                      {isVid ? (
+                                        <video src={mediaUrl} className="w-16 h-16 object-cover rounded-lg bg-black shrink-0" controls />
+                                      ) : (
+                                        <img src={mediaUrl} alt="Preview" className="w-16 h-16 object-cover rounded-lg border border-slate-200 shrink-0" />
+                                      )}
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-xs font-bold text-slate-700 truncate">{mediaUrl}</p>
+                                        <p className="text-[10px] text-slate-400 font-semibold">{isVid ? '🎬 Video ký hiệu' : '🖼️ Ảnh ký hiệu'}</p>
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => setQuestions(prev => prev.map(q => q.id === currentQ.id ? { ...q, questionImage: '', questionVideo: null } : q))}
+                                        className="p-1 hover:bg-red-100 text-red-500 rounded-lg text-xs shrink-0"
+                                        title="Xóa media"
+                                      >
+                                        <X className="w-4 h-4" />
+                                      </button>
+                                    </div>
+                                  );
+                                })()}
                               </div>
 
                               {/* 4 Image Options */}

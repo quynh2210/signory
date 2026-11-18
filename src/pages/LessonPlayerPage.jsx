@@ -103,25 +103,17 @@ export const LessonPlayerPage = () => {
       // Completed the entire lesson!
       const total = totalQuizzes || 1;
       const points = lesson?.rewardPoints || 50;
+      const effectiveUid = user?.uid || 'guest';
 
-      if (user) {
-        const result = await saveLessonProgress({
-          uid: user.uid,
-          lessonId: lesson.id,
-          score: newCorrect * 20,
-          totalQuestions: total,
-          correctAnswers: newCorrect,
-          lessonRewardPoints: points
-        });
-        setCompletionResult(result);
-      } else {
-        const stars = newCorrect === total ? 3 : (newCorrect > 0 ? 2 : 1);
-        setCompletionResult({
-          stars,
-          xpGained: points,
-          newlyAwardedBadges: []
-        });
-      }
+      const result = await saveLessonProgress({
+        uid: effectiveUid,
+        lessonId: lesson.id,
+        score: newCorrect * 20,
+        totalQuestions: total,
+        correctAnswers: newCorrect,
+        lessonRewardPoints: points
+      });
+      setCompletionResult(result);
       setIsCompleted(true);
     }
   };
