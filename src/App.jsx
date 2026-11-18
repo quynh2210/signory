@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { SoundProvider } from './context/SoundContext';
+import { ThemeProvider } from './context/ThemeContext';
 
 import Navbar from './components/layout/Navbar';
 import Footer from './components/layout/Footer';
@@ -13,6 +14,7 @@ import KidsModePage from './pages/KidsModePage';
 import LessonPlayerPage from './pages/LessonPlayerPage';
 import LeaderboardPage from './pages/LeaderboardPage';
 import ProfilePage from './pages/ProfilePage';
+import StoryMapPage from './pages/StoryMapPage';
 
 import AdminLayout from './pages/admin/AdminLayout';
 import AdminDashboardHome from './pages/admin/AdminDashboardHome';
@@ -23,6 +25,7 @@ import AdminUsersList from './pages/admin/AdminUsersList';
 import AdminBadgesList from './pages/admin/AdminBadgesList';
 import AdminSettings from './pages/admin/AdminSettings';
 import AdminVideoManager from './pages/admin/AdminVideoManager';
+import AdminStoryManager from './pages/admin/AdminStoryManager';
 import WatchVideoPage from './pages/WatchVideoPage';
 
 import { seedInitialDataToFirestore } from './services/dbService';
@@ -31,12 +34,10 @@ function AppContent() {
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const location = useLocation();
 
-  // Hide general Navbar and Footer inside full-screen Lesson Player, Admin Layout, or Watch page
   const isLessonPlayer = location.pathname.startsWith('/lesson/');
   const isAdmin = location.pathname.startsWith('/admin');
   const isWatchPage = location.pathname.startsWith('/watch/');
 
-  // Trigger initial seeding check on application mount
   useEffect(() => {
     seedInitialDataToFirestore(false).catch(err => {
       console.warn('Initial seed check:', err);
@@ -44,7 +45,7 @@ function AppContent() {
   }, []);
 
   return (
-    <div className="min-h-screen flex flex-col justify-between">
+    <div className="min-h-screen flex flex-col justify-between bg-[#f8fafc] dark:bg-[#0f172a] transition-colors duration-300">
       {!isLessonPlayer && !isAdmin && !isWatchPage && (
         <Navbar onOpenAuth={() => setIsAuthOpen(true)} />
       )}
@@ -54,11 +55,13 @@ function AppContent() {
           <Route path="/" element={<HomePage onOpenAuth={() => setIsAuthOpen(true)} />} />
           <Route path="/parents" element={<ParentsModePage />} />
           <Route path="/kids" element={<KidsModePage />} />
+          <Route path="/stories" element={<StoryMapPage />} />
+          <Route path="/stories/:storyId" element={<StoryMapPage />} />
           <Route path="/lesson/:lessonId" element={<LessonPlayerPage />} />
           <Route path="/leaderboard" element={<LeaderboardPage />} />
           <Route path="/profile" element={<ProfilePage />} />
 
-          {/* Standalone Watch Page - no Navbar/Footer, accessible via QR code */}
+          {/* Standalone Watch Page */}
           <Route path="/watch/:videoId" element={<WatchVideoPage />} />
 
           {/* Admin Routes */}
@@ -67,10 +70,11 @@ function AppContent() {
             <Route path="lessons" element={<AdminLessonsList />} />
             <Route path="builder" element={<AdminLessonBuilder />} />
             <Route path="media" element={<AdminMediaManager />} />
+            <Route path="videos" element={<AdminVideoManager />} />
+            <Route path="stories" element={<AdminStoryManager />} />
             <Route path="users" element={<AdminUsersList />} />
             <Route path="badges" element={<AdminBadgesList />} />
             <Route path="settings" element={<AdminSettings />} />
-            <Route path="videos" element={<AdminVideoManager />} />
           </Route>
         </Routes>
       </div>
@@ -88,11 +92,13 @@ function AppContent() {
 export default function App() {
   return (
     <Router>
-      <AuthProvider>
-        <SoundProvider>
-          <AppContent />
-        </SoundProvider>
-      </AuthProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <SoundProvider>
+            <AppContent />
+          </SoundProvider>
+        </AuthProvider>
+      </ThemeProvider>
     </Router>
   );
 }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { 
   Save, 
@@ -15,6 +15,8 @@ import {
   Sparkles, 
   CheckCircle2, 
   UploadCloud,
+  Upload,
+  Loader2,
   ChevronDown,
   Baby,
   Split,
@@ -58,6 +60,8 @@ export const AdminLessonBuilder = () => {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [uploadingBlockId, setUploadingBlockId] = useState(null);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadingThumbnail, setUploadingThumbnail] = useState(false);
+  const thumbnailInputRef = useRef(null);
 
   // Load existing lesson if editing
   useEffect(() => {
@@ -229,6 +233,21 @@ export const AdminLessonBuilder = () => {
   };
 
   // Cloudinary upload helper for blocks
+  const handleUploadThumbnail = async (file) => {
+    if (!file) return;
+    setUploadingThumbnail(true);
+    try {
+      const result = await uploadMediaToCloudinary(file, () => {});
+      playCorrect();
+      setLessonData(prev => ({ ...prev, thumbnail: result.url }));
+    } catch (err) {
+      playIncorrect();
+      alert(`Lỗi upload ảnh bìa: ${err.message}`);
+    } finally {
+      setUploadingThumbnail(false);
+    }
+  };
+
   const handleUploadBlockMedia = async (blockId, file, type = 'image') => {
     setUploadingBlockId(blockId);
     setUploadProgress(0);
@@ -520,18 +539,50 @@ export const AdminLessonBuilder = () => {
 
               <div className="md:col-span-2">
                 <label className="block text-xs font-black uppercase text-slate-500 mb-1">
-                  Ảnh bìa (Thumbnail URL)
+                  Ảnh bìa bài học (Thumbnail)
                 </label>
-                <div className="flex gap-3">
+                <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
                   <input
                     type="text"
                     value={lessonData.thumbnail}
                     onChange={(e) => setLessonData({ ...lessonData, thumbnail: e.target.value })}
-                    placeholder="https://..."
-                    className="flex-1 px-4 py-3 rounded-2xl border-2 border-slate-200 font-medium text-sm outline-none focus:border-purple-500"
+                    placeholder="Nhập URL ảnh hoặc bấm tải lên từ máy..."
+                    className="flex-1 px-4 py-3 rounded-2xl border-2 border-slate-200 font-medium text-sm outline-none focus:border-purple-500 w-full"
                   />
+                  <input
+                    type="file"
+                    ref={thumbnailInputRef}
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      if (e.target.files?.[0]) handleUploadThumbnail(e.target.files[0]);
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => thumbnailInputRef.current?.click()}
+                    disabled={uploadingThumbnail}
+                    className="px-4 py-3 bg-purple-100 hover:bg-purple-200 text-purple-700 font-black rounded-2xl text-xs flex items-center gap-2 transition-all shrink-0 border border-purple-200 disabled:opacity-50"
+                  >
+                    {uploadingThumbnail ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Đang tải lên...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="w-4 h-4" />
+                        <span>Tải ảnh từ máy</span>
+                      </>
+                    )}
+                  </button>
                   {lessonData.thumbnail && (
-                    <img src={lessonData.thumbnail} alt="Bìa" className="w-12 h-12 rounded-xl object-cover border border-slate-200" />
+                    <img
+                      src={lessonData.thumbnail}
+                      alt="Bìa"
+                      className="w-12 h-12 rounded-xl object-cover border border-slate-200 shrink-0 shadow-sm"
+                      onError={(e) => { e.target.style.display = 'none'; }}
+                    />
                   )}
                 </div>
               </div>

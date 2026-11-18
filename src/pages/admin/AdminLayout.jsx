@@ -67,6 +67,7 @@ export const AdminLayout = () => {
     { path: '/admin/lessons', label: 'Quản Lý Bài Học', icon: BookOpen },
     { path: '/admin/builder', label: 'Trình Tạo Bài Học', icon: FilePlus },
     { path: '/admin/media', label: 'Quản Lý Media', icon: ImageIcon },
+    { path: '/admin/stories', label: 'Câu Chuyện & Chương', icon: BookOpen },
     { path: '/admin/videos', label: 'Video QR', icon: Video },
     { path: '/admin/users', label: 'Người Dùng', icon: Users },
     { path: '/admin/badges', label: 'Phần Thưởng & Huy Hiệu', icon: Award },

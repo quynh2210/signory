@@ -153,7 +153,7 @@ export const uploadMediaToCloudinary = async (file, onProgress = () => {}) => {
           const errBody = JSON.parse(xhr.responseText);
           // Provide helpful Vietnamese error
           if (xhr.status === 401 || (errBody?.error?.message || '').includes('preset')) {
-            errMsg = 'Upload preset chưa được tạo. Hãy khởi động backend server: "npm run server"';
+            errMsg = 'Chưa thể tải lên Cloudinary. Vui lòng thêm biến môi trường CLOUDINARY_API_SECRET trên Vercel hoặc tạo upload preset unsigned "signory_unsigned" trên Cloudinary Dashboard.';
           } else if (errBody?.error?.message) {
             errMsg = errBody.error.message;
           }

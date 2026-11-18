@@ -31,6 +31,8 @@ const BADGES_COL = 'badges';
 const USER_BADGES_COL = 'userBadges';
 const USERS_COL = 'users';
 const SETTINGS_COL = 'appSettings';
+const STORIES_COL = 'stories';
+const CHAPTERS_COL = 'chapters';
 
 // Helper for local custom lessons
 const getLocalCustomLessons = () => {
@@ -93,55 +95,57 @@ export const seedInitialDataToFirestore = async (force = false) => {
 };
 
 /**
- * Fetch all lessons for a specific mode or all
+ * Fetch all lessons for a specific mode or all.
+ * Priority: Firestore (source of truth) → localStorage custom → seed fallback only if Firestore fails completely
  */
 export const getLessons = async (mode = 'parents') => {
-  let lessons = [];
+  let firestoreLessons = [];
+  let firestoreOk = false;
 
   try {
     const lessonsRef = collection(db, LESSONS_COL);
     const q = query(lessonsRef, orderBy('order', 'asc'));
     const snap = await getDocs(q);
-    
     snap.forEach(docSnap => {
-      lessons.push({ id: docSnap.id, ...docSnap.data() });
+      firestoreLessons.push({ id: docSnap.id, ...docSnap.data() });
     });
+    firestoreOk = true;
   } catch (error) {
-    console.warn('Firestore fetch lessons note, using local pool:', error);
+    console.warn('Firestore offline, using local fallback:', error.message);
   }
 
-  // Merge with local custom lessons and initial fallback
-  const localCustom = getLocalCustomLessons();
-  const mergedMap = new Map();
+  let allLessons;
 
-  INITIAL_LESSONS.forEach(l => mergedMap.set(l.id, l));
-  lessons.forEach(l => mergedMap.set(l.id, l));
-  localCustom.forEach(l => mergedMap.set(l.id, l));
+  if (firestoreOk) {
+    // Firestore is source of truth — also include localStorage lessons NOT in Firestore (created offline)
+    const localCustom = getLocalCustomLessons();
+    const firestoreIds = new Set(firestoreLessons.map(l => l.id));
+    const offlineOnly = localCustom.filter(l => !firestoreIds.has(l.id));
+    allLessons = [...firestoreLessons, ...offlineOnly];
+  } else {
+    // Full offline fallback
+    const localCustom = getLocalCustomLessons();
+    const mergedMap = new Map();
+    INITIAL_LESSONS.forEach(l => mergedMap.set(l.id, l));
+    localCustom.forEach(l => mergedMap.set(l.id, l));
+    allLessons = Array.from(mergedMap.values());
+  }
 
-  const allLessons = Array.from(mergedMap.values());
   allLessons.sort((a, b) => (a.order || 0) - (b.order || 0));
 
-  if (mode === 'admin') {
-    return allLessons;
-  }
-
+  if (mode === 'admin') return allLessons;
   return allLessons.filter(l => l.isPublished && (l.mode === mode || l.mode === 'both'));
 };
 
 /**
- * Fetch a full lesson with its content blocks and interactive questions
+ * Fetch a full lesson with its content blocks and interactive questions.
+ * Firestore is the source of truth; localStorage only as offline fallback.
  */
 export const getLessonDetails = async (lessonId) => {
   let lessonData = null;
   let blocks = [];
   let questions = [];
-
-  // Check local custom lessons first
-  const localCustom = getLocalCustomLessons();
-  const foundLocal = localCustom.find(l => l.id === lessonId);
-  if (foundLocal) {
-    lessonData = foundLocal;
-  }
+  let firestoreOk = false;
 
   try {
     const lessonRef = doc(db, LESSONS_COL, lessonId);
@@ -150,44 +154,46 @@ export const getLessonDetails = async (lessonId) => {
       lessonData = { id: lessonSnap.id, ...lessonSnap.data() };
     }
 
-    // Fetch blocks
     const blocksQuery = query(collection(db, BLOCKS_COL), where('lessonId', '==', lessonId));
     const blocksSnap = await getDocs(blocksQuery);
     blocksSnap.forEach(b => blocks.push({ id: b.id, ...b.data() }));
     blocks.sort((a, b) => a.order - b.order);
 
-    // Fetch questions
     const questionsQuery = query(collection(db, QUESTIONS_COL), where('lessonId', '==', lessonId));
     const questionsSnap = await getDocs(questionsQuery);
     questionsSnap.forEach(q => questions.push({ id: q.id, ...q.data() }));
     questions.sort((a, b) => a.order - b.order);
+
+    firestoreOk = true;
   } catch (error) {
-    console.warn('Firestore lesson details read note:', error);
+    console.warn('Firestore lesson details offline, using local fallback:', error.message);
   }
 
-  // Fallback to initial seed if not found
-  if (!lessonData) {
-    const fallback = INITIAL_LESSONS.find(l => l.id === lessonId);
-    if (fallback) lessonData = fallback;
+  // Offline fallbacks only when Firestore unavailable
+  if (!firestoreOk) {
+    const localCustom = getLocalCustomLessons();
+    const foundLocal = localCustom.find(l => l.id === lessonId);
+    if (foundLocal) lessonData = foundLocal;
+
+    if (!lessonData) {
+      const fallback = INITIAL_LESSONS.find(l => l.id === lessonId);
+      if (fallback) lessonData = fallback;
+    }
+
+    if (blocks.length === 0 && INITIAL_BLOCKS[lessonId]) {
+      blocks = INITIAL_BLOCKS[lessonId];
+    }
+    if (questions.length === 0) {
+      questions = INITIAL_QUESTIONS.filter(q => q.lessonId === lessonId);
+    }
+
+    const localBlocks = JSON.parse(localStorage.getItem(`signory_blocks_${lessonId}`) || '[]');
+    const localQuestions = JSON.parse(localStorage.getItem(`signory_questions_${lessonId}`) || '[]');
+    if (localBlocks.length > 0) blocks = localBlocks;
+    if (localQuestions.length > 0) questions = localQuestions;
   }
 
-  if (blocks.length === 0 && INITIAL_BLOCKS[lessonId]) {
-    blocks = INITIAL_BLOCKS[lessonId];
-  }
-
-  if (questions.length === 0) {
-    questions = INITIAL_QUESTIONS.filter(q => q.lessonId === lessonId);
-  }
-
-  // Also check local blocks/questions storage
-  const localBlocks = JSON.parse(localStorage.getItem(`signory_blocks_${lessonId}`) || '[]');
-  const localQuestions = JSON.parse(localStorage.getItem(`signory_questions_${lessonId}`) || '[]');
-
-  return lessonData ? {
-    ...lessonData,
-    blocks: localBlocks.length > 0 ? localBlocks : blocks,
-    questions: localQuestions.length > 0 ? localQuestions : questions
-  } : null;
+  return lessonData ? { ...lessonData, blocks, questions } : null;
 };
 
 /**
@@ -600,5 +606,143 @@ export const getAppSettings = async () => {
 
 export const saveAppSettings = async (settings) => {
   setDoc(doc(db, SETTINGS_COL, 'global'), settings, { merge: true }).catch(() => {});
+  return { success: true };
+};
+
+
+// ─────────────────────────────────────────────────────────────
+// STORY → CHAPTER → LESSON HIERARCHY
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Get all stories, ordered by order field
+ */
+export const getStories = async () => {
+  try {
+    const q = query(collection(db, STORIES_COL), orderBy('order', 'asc'));
+    const snap = await getDocs(q);
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch (e) {
+    console.warn('getStories error:', e.message);
+    return [];
+  }
+};
+
+export const saveStory = async (story) => {
+  const ref = doc(db, STORIES_COL, story.id);
+  await setDoc(ref, { ...story, updatedAt: new Date().toISOString() }, { merge: true });
+  return { success: true };
+};
+
+export const deleteStory = async (storyId) => {
+  await deleteDoc(doc(db, STORIES_COL, storyId));
+  // Also delete all chapters of this story
+  const snap = await getDocs(query(collection(db, CHAPTERS_COL), where('storyId', '==', storyId)));
+  const batch = writeBatch(db);
+  snap.docs.forEach(d => batch.delete(d.ref));
+  await batch.commit();
+  return { success: true };
+};
+
+/**
+ * Get chapters for a story, ordered
+ */
+export const getChapters = async (storyId) => {
+  try {
+    const q = query(
+      collection(db, CHAPTERS_COL),
+      where('storyId', '==', storyId),
+      orderBy('order', 'asc')
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch (e) {
+    console.warn('getChapters error:', e.message);
+    return [];
+  }
+};
+
+export const getAllChapters = async () => {
+  try {
+    const q = query(collection(db, CHAPTERS_COL), orderBy('order', 'asc'));
+    const snap = await getDocs(q);
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch (e) {
+    return [];
+  }
+};
+
+export const saveChapter = async (chapter) => {
+  const ref = doc(db, CHAPTERS_COL, chapter.id);
+  await setDoc(ref, { ...chapter, updatedAt: new Date().toISOString() }, { merge: true });
+  return { success: true };
+};
+
+export const deleteChapter = async (chapterId) => {
+  await deleteDoc(doc(db, CHAPTERS_COL, chapterId));
+  return { success: true };
+};
+
+/**
+ * Get lessons belonging to a chapter
+ */
+export const getLessonsByChapter = async (chapterId) => {
+  try {
+    const q = query(
+      collection(db, LESSONS_COL),
+      where('chapterId', '==', chapterId),
+      orderBy('order', 'asc')
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch (e) {
+    console.warn('getLessonsByChapter error:', e.message);
+    return [];
+  }
+};
+
+/**
+ * Seed sample Tấm Cám story with 3 chapters and 9 lessons
+ */
+export const seedTamCamStory = async () => {
+  const storyId = 'story-tam-cam';
+  const story = {
+    id: storyId,
+    title: 'Tấm Cám',
+    description: 'Học ngôn ngữ ký hiệu qua câu chuyện cổ tích Tấm Cám – một hành trình yêu thương và dũng cảm.',
+    coverImage: '',
+    order: 1,
+    isPublished: true,
+    createdAt: new Date().toISOString(),
+  };
+
+  const chapters = [
+    { id: 'chapter-tc-1', storyId, title: 'Khởi Đầu Câu Chuyện', description: 'Gặp gỡ nhân vật và làm quen với các ký hiệu đầu tiên.', order: 1, isPublished: true },
+    { id: 'chapter-tc-2', storyId, title: 'Khám Phá Cổ Tích', description: 'Theo chân Tấm qua những thử thách và phép màu.', order: 2, isPublished: true },
+    { id: 'chapter-tc-3', storyId, title: 'Kết Nối Yêu Thương', description: 'Học ký hiệu về tình cảm gia đình và hạnh phúc.', order: 3, isPublished: true },
+  ];
+
+  const lessons = [
+    // Chapter 1 – 3 lessons
+    { id: `lesson-tc-1-1`, storyId, chapterId: 'chapter-tc-1', title: 'Nhân vật trong truyện', description: 'Học ký hiệu tên các nhân vật: Tấm, Cám, Dì ghẻ.', order: 1, isPublished: true, isLockedByDefault: false, mode: 'parents', rewardPoints: 50, estimatedMinutes: 3, thumbnail: '', topic: 'Nhân vật', createdAt: new Date().toISOString() },
+    { id: `lesson-tc-1-2`, storyId, chapterId: 'chapter-tc-1', title: 'Gia đình và nhà cửa', description: 'Các ký hiệu về gia đình và nơi sinh sống.', order: 2, isPublished: true, isLockedByDefault: true, mode: 'parents', rewardPoints: 50, estimatedMinutes: 3, thumbnail: '', topic: 'Gia đình', createdAt: new Date().toISOString() },
+    { id: `lesson-tc-1-3`, storyId, chapterId: 'chapter-tc-1', title: 'Cảm xúc cơ bản', description: 'Vui, buồn, giận – học cách biểu đạt cảm xúc bằng ký hiệu.', order: 3, isPublished: true, isLockedByDefault: true, mode: 'parents', rewardPoints: 50, estimatedMinutes: 3, thumbnail: '', topic: 'Cảm xúc', createdAt: new Date().toISOString() },
+    // Chapter 2 – 3 lessons
+    { id: `lesson-tc-2-1`, storyId, chapterId: 'chapter-tc-2', title: 'Yêu cầu và xin phép', description: 'Học cách xin phép và nói yêu cầu bằng ký hiệu.', order: 4, isPublished: true, isLockedByDefault: true, mode: 'parents', rewardPoints: 60, estimatedMinutes: 3, thumbnail: '', topic: 'Giao tiếp', createdAt: new Date().toISOString() },
+    { id: `lesson-tc-2-2`, storyId, chapterId: 'chapter-tc-2', title: 'Màu sắc và vật phẩm', description: 'Ký hiệu về màu sắc, quần áo và vật dụng trong truyện.', order: 5, isPublished: true, isLockedByDefault: true, mode: 'parents', rewardPoints: 60, estimatedMinutes: 3, thumbnail: '', topic: 'Vật phẩm', createdAt: new Date().toISOString() },
+    { id: `lesson-tc-2-3`, storyId, chapterId: 'chapter-tc-2', title: 'Hành động hàng ngày', description: 'Học ký hiệu các động từ: đi, ăn, ngủ, khóc, cười.', order: 6, isPublished: true, isLockedByDefault: true, mode: 'parents', rewardPoints: 60, estimatedMinutes: 3, thumbnail: '', topic: 'Hành động', createdAt: new Date().toISOString() },
+    // Chapter 3 – 3 lessons
+    { id: `lesson-tc-3-1`, storyId, chapterId: 'chapter-tc-3', title: 'Yêu thương và quan tâm', description: 'Nói "yêu", "cảm ơn", "xin lỗi" bằng ngôn ngữ ký hiệu.', order: 7, isPublished: true, isLockedByDefault: true, mode: 'parents', rewardPoints: 70, estimatedMinutes: 3, thumbnail: '', topic: 'Tình cảm', createdAt: new Date().toISOString() },
+    { id: `lesson-tc-3-2`, storyId, chapterId: 'chapter-tc-3', title: 'Nơi chốn và không gian', description: 'Ký hiệu về cung điện, ao hồ, rừng núi.', order: 8, isPublished: true, isLockedByDefault: true, mode: 'parents', rewardPoints: 70, estimatedMinutes: 3, thumbnail: '', topic: 'Nơi chốn', createdAt: new Date().toISOString() },
+    { id: `lesson-tc-3-3`, storyId, chapterId: 'chapter-tc-3', title: 'Kết thúc hạnh phúc', description: 'Ôn tập tổng hợp và học ký hiệu về niềm vui, hạnh phúc.', order: 9, isPublished: true, isLockedByDefault: true, mode: 'parents', rewardPoints: 100, estimatedMinutes: 5, thumbnail: '', topic: 'Ôn tập', createdAt: new Date().toISOString() },
+  ];
+
+  await setDoc(doc(db, STORIES_COL, storyId), story);
+  for (const ch of chapters) {
+    await setDoc(doc(db, CHAPTERS_COL, ch.id), ch);
+  }
+  for (const ls of lessons) {
+    await setDoc(doc(db, LESSONS_COL, ls.id), ls, { merge: true });
+  }
   return { success: true };
 };
