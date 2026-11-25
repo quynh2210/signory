@@ -17,12 +17,15 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { useSound } from '../context/SoundContext';
 import { getLessons, getUserProgress } from '../services/dbService';
+import ModeTransitionOverlay from '../components/common/ModeTransitionOverlay';
+import LearningMapBackdrop from '../components/common/LearningMapBackdrop';
 
 export const ParentsModePage = () => {
   const [lessons, setLessons] = useState([]);
   const [userProgressMap, setUserProgressMap] = useState({});
   const [selectedLesson, setSelectedLesson] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [showIntro, setShowIntro] = useState(true);
 
   const { user, userProfile } = useAuth();
   const { playClick } = useSound();
@@ -69,11 +72,19 @@ export const ParentsModePage = () => {
 
   const handleStartLesson = (lessonId) => {
     playClick();
-    navigate(`/lesson/${lessonId}`);
+    try {
+      sessionStorage.setItem('signory_last_learning_tab', '/parents');
+    } catch {}
+    navigate(`/lesson/${lessonId}?returnTo=${encodeURIComponent('/parents')}`);
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8 space-y-8">
+    <div className="min-h-screen relative overflow-x-clip">
+      {showIntro && (
+        <ModeTransitionOverlay mode="parents" onComplete={() => setShowIntro(false)} />
+      )}
+      <LearningMapBackdrop variant="parents" />
+      <div className="relative z-10 max-w-4xl mx-auto px-4 py-8 space-y-8">
       {/* Top Banner / Goal Progress */}
       <div className="bg-white rounded-3xl p-6 border-2 border-slate-100 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-4">
@@ -270,6 +281,7 @@ export const ParentsModePage = () => {
           </motion.div>
         </div>
       )}
+      </div>
     </div>
   );
 };

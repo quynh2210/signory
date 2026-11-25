@@ -12,6 +12,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { useSound } from '../context/SoundContext';
 import { getLeaderboard } from '../services/dbService';
+import AtmosphericBackdrop from '../components/common/AtmosphericBackdrop';
 
 export const LeaderboardPage = () => {
   const [users, setUsers] = useState([]);
@@ -36,7 +37,9 @@ export const LeaderboardPage = () => {
   }, []);
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8 space-y-8">
+    <div className="relative min-h-screen overflow-x-clip">
+      <AtmosphericBackdrop variant="leaderboard" />
+      <div className="relative z-10 max-w-4xl mx-auto px-4 py-8 space-y-8">
       {/* Header */}
       <div className="bg-gradient-to-r from-amber-400 via-yellow-400 to-orange-400 rounded-3xl p-6 md:p-8 text-yellow-950 shadow-lg flex flex-col md:flex-row items-center justify-between gap-6">
         <div className="space-y-2 text-center md:text-left">
@@ -151,6 +154,7 @@ export const LeaderboardPage = () => {
             })}
           </div>
         )}
+      </div>
       </div>
     </div>
   );

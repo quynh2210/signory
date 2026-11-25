@@ -16,12 +16,15 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { useSound } from '../context/SoundContext';
 import { getLessons, getUserProgress } from '../services/dbService';
+import ModeTransitionOverlay from '../components/common/ModeTransitionOverlay';
+import LearningMapBackdrop from '../components/common/LearningMapBackdrop';
 
 export const KidsModePage = () => {
   const [lessons, setLessons] = useState([]);
   const [userProgressMap, setUserProgressMap] = useState({});
   const [selectedLesson, setSelectedLesson] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [showIntro, setShowIntro] = useState(true);
 
   const { user, userProfile } = useAuth();
   const { playClick } = useSound();
@@ -67,12 +70,19 @@ export const KidsModePage = () => {
 
   const handleStartLesson = (lessonId) => {
     playClick();
-    navigate(`/lesson/${lessonId}?mode=kids`);
+    try {
+      sessionStorage.setItem('signory_last_learning_tab', '/kids');
+    } catch {}
+    navigate(`/lesson/${lessonId}?mode=kids&returnTo=${encodeURIComponent('/kids')}`);
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-sky-50 via-purple-50 to-pink-50 dark:from-slate-950 dark:via-purple-950/30 dark:to-slate-900 pb-20 px-4 transition-colors duration-300">
-      <div className="max-w-4xl mx-auto py-8 space-y-8">
+    <div className="min-h-screen relative overflow-x-clip pb-20 px-4">
+      {showIntro && (
+        <ModeTransitionOverlay mode="kids" onComplete={() => setShowIntro(false)} />
+      )}
+      <LearningMapBackdrop variant="kids" />
+      <div className="relative z-10 max-w-4xl mx-auto py-8 space-y-8">
         {/* Top Kids Banner */}
         <div className="bg-white dark:bg-slate-800 rounded-[32px] p-6 border-4 border-purple-200 dark:border-purple-800 shadow-duo-lg flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-4">

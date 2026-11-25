@@ -33,9 +33,17 @@ export const LessonPlayerPage = () => {
   const [isCompleted, setIsCompleted] = useState(false);
   const [completionResult, setCompletionResult] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [showLessonStartSplash, setShowLessonStartSplash] = useState(true);
 
   // Check if current flow is Kids Mode
   const isKidsMode = searchParams.get('mode') === 'kids' || lesson?.mode === 'kids';
+
+  useEffect(() => {
+    if (!loading && lesson && showLessonStartSplash) {
+      const t = setTimeout(() => setShowLessonStartSplash(false), 1150);
+      return () => clearTimeout(t);
+    }
+  }, [loading, lesson, showLessonStartSplash]);
 
   useEffect(() => {
     const fetchLesson = async () => {
@@ -118,6 +126,18 @@ export const LessonPlayerPage = () => {
     }
   };
 
+  // Resolve exact origin tab to return to on exit or completion
+  const resolveReturnPath = (loadedLesson) => {
+    const paramReturn = searchParams.get('returnTo');
+    if (paramReturn) return paramReturn;
+    try {
+      const stored = sessionStorage.getItem('signory_last_learning_tab');
+      if (stored) return stored;
+    } catch {}
+    if (loadedLesson?.storyId) return `/stories/${loadedLesson.storyId}`;
+    return isKidsMode ? '/kids' : '/parents';
+  };
+
   const handleReplay = () => {
     playClick();
     setCurrentStepIndex(0);
@@ -128,7 +148,7 @@ export const LessonPlayerPage = () => {
 
   const handleExit = () => {
     playClick();
-    navigate(isKidsMode ? '/kids' : '/parents');
+    navigate(resolveReturnPath(lesson));
   };
 
   if (loading) {
@@ -145,9 +165,102 @@ export const LessonPlayerPage = () => {
     : 0;
 
   return (
-    <div className={`min-h-screen flex flex-col justify-between transition-colors duration-300 ${
-      isKidsMode ? 'bg-gradient-to-b from-sky-50 via-purple-50 to-pink-50 dark:from-slate-950 dark:via-purple-950/30 dark:to-slate-900' : 'bg-white dark:bg-slate-900'
+    <div className={`min-h-screen flex flex-col justify-between transition-colors duration-300 relative overflow-hidden ${
+      isKidsMode ? 'bg-gradient-to-b from-sky-50 via-purple-50 to-pink-50 dark:from-slate-950 dark:via-purple-950/30 dark:to-slate-900' : 'bg-[#fbfaf6] dark:bg-slate-900'
     }`}>
+      {/* Lesson Start Fullscreen Opaque Illustrated Backdrop Splash (Section 6.4) */}
+      <AnimatePresence>
+        {showLessonStartSplash && lesson && (
+          <motion.div
+            initial={{ opacity: 1 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0, scale: 1.03 }}
+            transition={{ duration: 0.38 }}
+            className={`fixed inset-0 z-[80] overflow-hidden flex flex-col items-center justify-center p-6 text-center ${
+              isKidsMode
+                ? 'bg-gradient-to-br from-sky-200 via-purple-200 to-pink-200 dark:from-indigo-950 dark:via-purple-950 dark:to-slate-900'
+                : 'bg-gradient-to-br from-[#fdf8ed] via-emerald-100 to-amber-100 dark:from-slate-950 dark:via-emerald-950 dark:to-slate-900'
+            }`}
+          >
+            {/* Full opaque decorative background layers behind splash card */}
+            <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
+              <div
+                className="absolute -top-24 -left-24 w-96 h-96 rounded-full blur-3xl opacity-70 dark:opacity-35"
+                style={{
+                  background: isKidsMode
+                    ? 'radial-gradient(circle, rgba(192, 132, 252, 0.55), transparent 70%)'
+                    : 'radial-gradient(circle, rgba(251, 191, 36, 0.45), transparent 70%)',
+                }}
+              />
+              <div
+                className="absolute -bottom-24 -right-24 w-96 h-96 rounded-full blur-3xl opacity-70 dark:opacity-35"
+                style={{
+                  background: isKidsMode
+                    ? 'radial-gradient(circle, rgba(56, 189, 248, 0.5), transparent 70%)'
+                    : 'radial-gradient(circle, rgba(52, 211, 153, 0.4), transparent 70%)',
+                }}
+              />
+              <div className="absolute top-[14%] left-[10%] animate-cloud-slow opacity-75 dark:opacity-25">
+                <svg width="150" viewBox="0 0 200 90" fill="none">
+                  <path
+                    d="M42 74h112c17.673 0 32-12.536 32-28 0-14.3-12.226-26.1-28.11-27.79C152.08 7.59 140.48 0 127 0c-16.84 0-31.02 10.75-35.84 25.56C87.17 23.92 82.72 23 78 23c-16.016 0-29 12.088-29 27 0 1.48.128 2.932.374 4.342C36.04 56.08 26 64.17 26 74h16z"
+                    fill="var(--signory-cloud)"
+                  />
+                </svg>
+              </div>
+              <div className="absolute bottom-[16%] right-[12%] animate-wind-float">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M12 2C16.5 6 19 11 16 17C14 20.5 9.5 21 6.5 18C3.5 15 4 9.5 8 5.5C9.5 4 10.8 2.8 12 2Z"
+                    fill="var(--signory-petal)"
+                  />
+                </svg>
+              </div>
+            </div>
+
+            <motion.div
+              initial={{ scale: 0.78, opacity: 0, y: 18 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              transition={{ type: 'spring', stiffness: 260, damping: 18 }}
+              className="relative z-10 bg-white/90 dark:bg-slate-800/90 backdrop-blur-md rounded-[36px] p-8 md:p-10 border-4 border-white/80 dark:border-slate-700 shadow-2xl space-y-4 max-w-lg w-full"
+            >
+              {lesson.thumbnail ? (
+                <img
+                  src={lesson.thumbnail}
+                  alt={lesson.title}
+                  className="w-24 h-24 rounded-3xl mx-auto object-cover border-4 border-white dark:border-slate-700 shadow-lg"
+                />
+              ) : (
+                <div
+                  className={`w-16 h-16 rounded-3xl mx-auto flex items-center justify-center shadow-lg ${
+                    isKidsMode ? 'bg-duo-purple text-white' : 'bg-brand-500 text-white'
+                  }`}
+                >
+                  {isKidsMode ? <Baby className="w-9 h-9" /> : <Sparkles className="w-9 h-9" />}
+                </div>
+              )}
+              {lesson.topic && (
+                <span
+                  className={`inline-block px-3.5 py-1 rounded-full text-xs font-black uppercase tracking-wider ${
+                    isKidsMode
+                      ? 'bg-purple-200 dark:bg-purple-900 text-purple-800 dark:text-purple-200'
+                      : 'bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200'
+                  }`}
+                >
+                  {lesson.topic}
+                </span>
+              )}
+              <h1 className="text-2xl sm:text-3xl font-black text-slate-800 dark:text-white leading-tight">
+                {lesson.title}
+              </h1>
+              <p className="text-sm font-bold text-slate-500 dark:text-slate-300">
+                {isKidsMode ? 'Sẵn sàng vui học ký hiệu nào! ✨' : 'Hít một hơi thật nhẹ và bắt đầu nhé...'}
+              </p>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Top Header / Progress Bar */}
       <div className="max-w-4xl w-full mx-auto px-4 py-4 flex items-center justify-between gap-4">
         {/* Exit Button */}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
-import { BookOpen, ChevronRight, Lock, Unlock, Star, Sparkles, ArrowLeft, Loader2, Layers, CheckCircle2 } from 'lucide-react';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { BookOpen, ChevronRight, Lock, Unlock, Star, Sparkles, ArrowLeft, Loader2, Layers, CheckCircle2, Camera } from 'lucide-react';
 import {
   getStories,
   getChapters,
@@ -9,13 +9,18 @@ import {
   seedTamCamStory
 } from '../services/dbService';
 import { useAuth } from '../context/AuthContext';
+import SignMirrorView from '../components/mirror/SignMirrorView';
+import LearningMapBackdrop from '../components/common/LearningMapBackdrop';
 
 const PLACEHOLDER_COVER = 'https://images.unsplash.com/photo-1513694203232-719a280e022f?w=600&auto=format&fit=crop&q=80';
 
 export const StoryMapPage = () => {
   const { storyId } = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const { user, userProfile } = useAuth();
+
+  const activeStoryTab = searchParams.get('tab') === 'mirror' ? 'mirror' : 'lessons';
 
   const [stories, setStories] = useState([]);
   const [selectedStory, setSelectedStory] = useState(null);
@@ -75,6 +80,9 @@ export const StoryMapPage = () => {
     setChapters([]);
     setLessonsByChapter({});
     setLoading(true);
+    try {
+      sessionStorage.setItem('signory_last_learning_tab', `/stories/${story.id}`);
+    } catch {}
     navigate(`/stories/${story.id}`);
     await loadChapters(story.id);
     setLoading(false);
@@ -152,8 +160,9 @@ export const StoryMapPage = () => {
   // Story listing screen
   if (!selectedStory) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-purple-50 to-white dark:from-gray-900 dark:to-gray-800 py-10 px-4">
-        <div className="max-w-4xl mx-auto">
+      <div className="min-h-screen relative overflow-x-clip py-10 px-4">
+        <LearningMapBackdrop variant="story" />
+        <div className="relative z-10 max-w-4xl mx-auto">
           <div className="text-center mb-10">
             <div className="inline-flex items-center gap-3 bg-purple-100 dark:bg-purple-900/40 px-5 py-2 rounded-full mb-4">
               <BookOpen className="w-5 h-5 text-purple-600 dark:text-purple-300" />
@@ -214,10 +223,11 @@ export const StoryMapPage = () => {
     );
   }
 
-  // Chapter + Lesson view
+  // Chapter + Lesson view OR SIGN MIRROR view
   return (
-    <div className="min-h-screen bg-gradient-to-b from-purple-50 to-white dark:from-gray-900 dark:to-gray-800 py-8 px-4">
-      <div className="max-w-3xl mx-auto">
+    <div className="min-h-screen relative overflow-x-clip py-8 px-4">
+      <LearningMapBackdrop variant="story" />
+      <div className={`relative z-10 ${activeStoryTab === 'mirror' ? 'max-w-5xl' : 'max-w-3xl'} mx-auto transition-all duration-300`}>
         {/* Breadcrumb */}
         <div className="flex items-center gap-2 text-sm font-bold text-slate-500 dark:text-slate-400 mb-6 flex-wrap">
           <button onClick={() => { setSelectedStory(null); navigate('/stories'); }} className="hover:text-purple-600 dark:hover:text-purple-400 transition-colors flex items-center gap-1">
@@ -229,7 +239,7 @@ export const StoryMapPage = () => {
         </div>
 
         {/* Story Header */}
-        <div className="relative rounded-3xl overflow-hidden mb-8 shadow-xl">
+        <div className="relative rounded-3xl overflow-hidden mb-6 shadow-xl">
           <img
             src={selectedStory.coverImage || PLACEHOLDER_COVER}
             alt={selectedStory.title}
@@ -244,6 +254,39 @@ export const StoryMapPage = () => {
           </div>
         </div>
 
+        {/* Mode Switcher inside Story: 1. Học câu chuyện | 2. SIGN MIRROR */}
+        <div className="grid grid-cols-2 gap-3 mb-7 bg-white dark:bg-gray-800 p-2 rounded-3xl border border-slate-200 dark:border-gray-700 shadow-sm">
+          <button
+            onClick={() => setSearchParams({})}
+            className={`py-3.5 px-4 rounded-2xl font-black text-sm flex items-center justify-center gap-2 transition-all ${
+              activeStoryTab === 'lessons'
+                ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md'
+                : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-gray-700'
+            }`}
+          >
+            <BookOpen className="w-4 h-4 shrink-0" />
+            <span>Học Câu Chuyện</span>
+          </button>
+          <button
+            onClick={() => setSearchParams({ tab: 'mirror' })}
+            className={`py-3.5 px-4 rounded-2xl font-black text-sm flex items-center justify-center gap-2 transition-all ${
+              activeStoryTab === 'mirror'
+                ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md'
+                : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-gray-700'
+            }`}
+          >
+            <Camera className="w-4 h-4 shrink-0" />
+            <span>SIGN MIRROR</span>
+          </button>
+        </div>
+
+        {activeStoryTab === 'mirror' ? (
+          <SignMirrorView
+            story={selectedStory}
+            onBackToLessons={() => setSearchParams({})}
+          />
+        ) : (
+          <>
         {/* Chapters */}
         {chapters.length === 0 ? (
           <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-3xl border border-slate-100 dark:border-gray-700">
@@ -348,7 +391,14 @@ export const StoryMapPage = () => {
                           return (
                             <button
                               key={lesson.id}
-                              onClick={() => unlocked && navigate(`/lesson/${lesson.id}`)}
+                              onClick={() => {
+                                if (!unlocked) return;
+                                const backTo = `/stories/${selectedStory.id}`;
+                                try {
+                                  sessionStorage.setItem('signory_last_learning_tab', backTo);
+                                } catch {}
+                                navigate(`/lesson/${lesson.id}?returnTo=${encodeURIComponent(backTo)}`);
+                              }}
                               disabled={!unlocked}
                               className={`w-full flex items-center gap-4 p-4 rounded-2xl border-2 transition-all text-left ${
                                 !unlocked
@@ -399,6 +449,8 @@ export const StoryMapPage = () => {
               );
             })}
           </div>
+        )}
+          </>
         )}
       </div>
     </div>

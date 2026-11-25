@@ -1,7 +1,115 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Cho phép đọc và ghi dữ liệu phục vụ học tập và quản trị SIGNORY
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isAdmin() {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // SIGNORY AI: dữ liệu hội thoại riêng tư theo từng người dùng
+    match /aiConversations/{conversationId} {
+      allow read, delete: if isOwner(resource.data.uid) || isAdmin();
+      allow create, update: if isOwner(request.resource.data.uid) || isAdmin();
+    }
+
+    match /aiMessages/{messageId} {
+      allow read, delete: if isOwner(resource.data.uid) || isAdmin();
+      allow create, update: if isOwner(request.resource.data.uid) || isAdmin();
+    }
+
+    // Kiến thức AI & SIGN MIRROR: công khai đọc, chỉ ADMIN chỉnh sửa
+    match /aiKnowledge/{knowledgeId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /storySentences/{sentenceId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /signVideos/{signId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // SIGNORY CIRCLE: người dùng tạo/sửa/xóa nội dung của mình; ADMIN có quyền kiểm duyệt ẩn/xóa
+    match /communityPosts/{postId} {
+      allow read: if true;
+      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+      allow update: if isAdmin() || isOwner(resource.data.uid) ||
+        (isSignedIn() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes', 'likesCount', 'commentsCount']));
+      allow delete: if isOwner(resource.data.uid) || isAdmin();
+    }
+
+    match /communityComments/{commentId} {
+      allow read: if true;
+      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if isOwner(resource.data.uid) || isAdmin();
+    }
+
+    match /communityFollows/{followId} {
+      allow read: if true;
+      allow create: if isSignedIn() && request.resource.data.followerUid == request.auth.uid;
+      allow delete: if isOwner(resource.data.followerUid) || isAdmin();
+    }
+
+    match /communityReports/{reportId} {
+      allow read: if isAdmin() || isOwner(resource.data.reporterUid);
+      allow create: if isSignedIn() && request.resource.data.reporterUid == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    match /communityBlocks/{blockId} {
+      allow read, delete: if isOwner(resource.data.blockerUid);
+      allow create: if isOwner(request.resource.data.blockerUid);
+    }
+
+    match /communityNotifications/{notifId} {
+      allow read, update, delete: if isOwner(resource.data.recipientUid);
+      allow create: if isSignedIn();
+    }
+
+    // WALL OF KINDNESS: người dùng tạo & xóa thiệp của mình; ADMIN kiểm duyệt ẩn/khôi phục/xóa
+    match /kindnessCards/{cardId} {
+      allow read: if true;
+      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+      allow update: if isAdmin() || isOwner(resource.data.uid);
+      allow delete: if isOwner(resource.data.uid) || isAdmin();
+    }
+
+    // Nhật ký kiểm duyệt của ADMIN
+    match /adminModerationLogs/{logId} {
+      allow read, write: if isAdmin();
+    }
+
+    // Tiến độ cá nhân của người dùng
+    match /userProgress/{progressId} {
+      allow read: if isOwner(resource.data.uid) || isAdmin();
+      allow create, update: if isOwner(request.resource.data.uid) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Ngăn người dùng tự sửa role thành admin trực tiếp trên Firestore
+    match /users/{uid} {
+      allow read: if true;
+      allow create: if isSignedIn() && request.auth.uid == uid &&
+        (!('role' in request.resource.data) || request.resource.data.role == 'user');
+      allow update: if isAdmin() ||
+        (isOwner(uid) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']));
+      allow delete: if isAdmin();
+    }
+
+    // Giữ nguyên khả năng tương thích cho toàn bộ dữ liệu học tập & quản trị hiện có
     match /{document=**} {
       allow read, write: if true;
     }

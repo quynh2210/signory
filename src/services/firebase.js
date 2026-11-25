@@ -1,26 +1,33 @@
-import { initializeApp } from 'firebase/app';
-import { 
-  getAuth, 
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword, 
-  signOut, 
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import {
+  initializeAppCheck,
+  ReCaptchaEnterpriseProvider,
+  CustomProvider,
+} from 'firebase/app-check';
+import { getAI, GoogleAIBackend } from 'firebase/ai';
+import {
+  getAuth,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut,
   sendPasswordResetEmail,
   onAuthStateChanged,
   updateProfile
 } from 'firebase/auth';
-import { 
-  getFirestore, 
-  doc, 
-  getDoc, 
-  setDoc, 
-  updateDoc, 
-  collection, 
-  query, 
-  where, 
-  getDocs, 
-  addDoc, 
-  deleteDoc, 
+import {
+  getFirestore,
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  collection,
+  query,
+  where,
+  getDocs,
+  addDoc,
+  deleteDoc,
   orderBy,
+  limit,
   serverTimestamp,
   writeBatch
 } from 'firebase/firestore';
@@ -35,10 +42,59 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-V5EDMHQD4L"
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
+// 1. Initialize Firebase App (singleton)
+const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+
+// 2. Initialize Firebase App Check STRICTLY ONCE before Auth, Firestore, and AI Logic
+const isLocalDevelopment =
+  import.meta.env.DEV ||
+  (typeof window !== 'undefined' &&
+    ['localhost', '127.0.0.1'].includes(window.location.hostname));
+
+function initAppCheckOnce(firebaseApp) {
+  if (typeof window === 'undefined') return null;
+
+  if (globalThis.__SIGNORY_APP_CHECK__) {
+    return globalThis.__SIGNORY_APP_CHECK__;
+  }
+
+  let provider;
+
+  if (isLocalDevelopment) {
+    // Local environment: activate Firebase App Check Debug Provider ONLY
+    const debugTokenEnv = import.meta.env.VITE_FIREBASE_APP_CHECK_DEBUG_TOKEN;
+    self.FIREBASE_APPCHECK_DEBUG_TOKEN =
+      debugTokenEnv && debugTokenEnv !== 'true' ? debugTokenEnv : true;
+
+    // Lightweight placeholder provider: in debug mode, Firebase App Check SDK
+    // automatically intercepts getToken()/getLimitedUseToken() and exchanges the debug token.
+    provider = new CustomProvider({
+      getToken: async () => {
+        throw new Error('Firebase App Check Debug mode requires a registered debug token.');
+      },
+    });
+  } else {
+    // Production environment: use ReCaptchaEnterpriseProvider ONLY (public site key)
+    const siteKey =
+      import.meta.env.VITE_FIREBASE_APP_CHECK_SITE_KEY ||
+      '6Lf2CDIuAAAAAGRf9jWnFD-iQSz9StDjLZ05v035';
+    provider = new ReCaptchaEnterpriseProvider(siteKey);
+  }
+
+  globalThis.__SIGNORY_APP_CHECK__ = initializeAppCheck(firebaseApp, {
+    provider,
+    isTokenAutoRefreshEnabled: true,
+  });
+
+  return globalThis.__SIGNORY_APP_CHECK__;
+}
+
+export const appCheck = initAppCheckOnce(app);
+
+// 3. Initialize protected Firebase services AFTER App Check
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+export const ai = getAI(app, { backend: new GoogleAIBackend() });
 
 export {
   signInWithEmailAndPassword,
@@ -58,6 +114,7 @@ export {
   addDoc,
   deleteDoc,
   orderBy,
+  limit,
   serverTimestamp,
   writeBatch
 };

@@ -3,7 +3,7 @@ import { Heart, ShieldCheck, Sparkles, Mail, Bot, BookOpen, Info } from 'lucide-
 
 export const Footer = () => {
   return (
-    <footer className="bg-white dark:bg-slate-900 border-t-2 border-slate-100 dark:border-slate-800 mt-16 text-slate-500 dark:text-slate-400 text-sm transition-colors duration-300">
+    <footer className="relative z-10 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t-2 border-slate-100 dark:border-slate-800 mt-16 text-slate-500 dark:text-slate-400 text-sm transition-colors duration-300">
       {/* Main footer content */}
       <div className="max-w-6xl mx-auto px-4 py-10 space-y-8">
 
@@ -13,7 +13,7 @@ export const Footer = () => {
             <img src="/logo.svg" alt="SIGNORY" className="w-9 h-9" />
             <div>
               <span className="text-2xl font-black text-slate-800 dark:text-slate-100">
-                SIGN<span className="text-brand-500">ORY</span>
+                SIGN<span className="text-amber-500 dark:text-yellow-400">ORY</span>
               </span>
               <p className="text-xs text-slate-400 dark:text-slate-500 font-semibold">Nền tảng học ngôn ngữ ký hiệu</p>
             </div>

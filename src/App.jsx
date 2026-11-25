@@ -15,6 +15,8 @@ import LessonPlayerPage from './pages/LessonPlayerPage';
 import LeaderboardPage from './pages/LeaderboardPage';
 import ProfilePage from './pages/ProfilePage';
 import StoryMapPage from './pages/StoryMapPage';
+import CommunityCirclePage from './pages/CommunityCirclePage';
+import WallOfKindnessPage from './pages/WallOfKindnessPage';
 
 import AdminLayout from './pages/admin/AdminLayout';
 import AdminDashboardHome from './pages/admin/AdminDashboardHome';
@@ -26,7 +28,12 @@ import AdminBadgesList from './pages/admin/AdminBadgesList';
 import AdminSettings from './pages/admin/AdminSettings';
 import AdminVideoManager from './pages/admin/AdminVideoManager';
 import AdminStoryManager from './pages/admin/AdminStoryManager';
+import AdminAIKnowledgeManager from './pages/admin/AdminAIKnowledgeManager';
+import AdminSignMirrorManager from './pages/admin/AdminSignMirrorManager';
+import AdminCommunityManager from './pages/admin/AdminCommunityManager';
+import AdminKindnessManager from './pages/admin/AdminKindnessManager';
 import WatchVideoPage from './pages/WatchVideoPage';
+import SignoryChatbot from './components/ai/SignoryChatbot';
 
 import { seedInitialDataToFirestore } from './services/dbService';
 
@@ -59,6 +66,8 @@ function AppContent() {
           <Route path="/stories/:storyId" element={<StoryMapPage />} />
           <Route path="/lesson/:lessonId" element={<LessonPlayerPage />} />
           <Route path="/leaderboard" element={<LeaderboardPage />} />
+          <Route path="/circle" element={<CommunityCirclePage />} />
+          <Route path="/kindness" element={<WallOfKindnessPage />} />
           <Route path="/profile" element={<ProfilePage />} />
 
           {/* Standalone Watch Page */}
@@ -72,6 +81,10 @@ function AppContent() {
             <Route path="media" element={<AdminMediaManager />} />
             <Route path="videos" element={<AdminVideoManager />} />
             <Route path="stories" element={<AdminStoryManager />} />
+            <Route path="mirror" element={<AdminSignMirrorManager />} />
+            <Route path="ai-knowledge" element={<AdminAIKnowledgeManager />} />
+            <Route path="community" element={<AdminCommunityManager />} />
+            <Route path="kindness" element={<AdminKindnessManager />} />
             <Route path="users" element={<AdminUsersList />} />
             <Route path="badges" element={<AdminBadgesList />} />
             <Route path="settings" element={<AdminSettings />} />
@@ -80,6 +93,8 @@ function AppContent() {
       </div>
 
       {!isLessonPlayer && !isAdmin && !isWatchPage && <Footer />}
+
+      <SignoryChatbot />
 
       <AuthModal
         isOpen={isAuthOpen}

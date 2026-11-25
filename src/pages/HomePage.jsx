@@ -10,17 +10,23 @@ import {
   Play, 
   Star, 
   Award,
-  ArrowRight
+  ArrowRight,
+  Camera,
+  MessageCircle,
+  Bot
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useSound } from '../context/SoundContext';
+import AtmosphericBackdrop from '../components/common/AtmosphericBackdrop';
 
 export const HomePage = ({ onOpenAuth }) => {
   const { user } = useAuth();
   const { playClick } = useSound();
 
   return (
-    <div className="space-y-16 pb-16">
+    <div className="relative min-h-screen overflow-x-clip">
+      <AtmosphericBackdrop variant="home" />
+      <div className="relative z-10 space-y-16 pb-16">
       {/* Hero Section */}
       <section className="relative overflow-hidden pt-8 md:pt-14 px-4">
         <div className="max-w-6xl mx-auto flex flex-col lg:flex-row items-center justify-between gap-10">
@@ -31,7 +37,7 @@ export const HomePage = ({ onOpenAuth }) => {
               <span>Nền tảng học ngôn ngữ ký hiệu cùng truyện tranh</span>
             </div>
 
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black text-slate-850 tracking-tight leading-tight">
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black text-slate-800 dark:text-white tracking-tight leading-tight">
               Học Ngôn Ngữ Ký Hiệu <br />
               <span className="text-brand-500 underline decoration-yellow-400 decoration-wavy decoration-2">
                 Gắn Kết Gia Đình
@@ -217,6 +223,63 @@ export const HomePage = ({ onOpenAuth }) => {
         </div>
       </section>
 
+      {/* New Advanced Ecosystem Highlights */}
+      <section className="max-w-6xl mx-auto px-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <Link
+            to="/stories/story-tam-cam?tab=mirror"
+            onClick={playClick}
+            className="bg-white dark:bg-slate-800 rounded-3xl p-5 border-2 border-emerald-200 dark:border-emerald-800/70 hover:shadow-lg transition-all space-y-2.5 group"
+          >
+            <div className="w-11 h-11 rounded-2xl bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-300 flex items-center justify-center">
+              <Camera className="w-6 h-6" />
+            </div>
+            <h3 className="font-black text-slate-800 dark:text-white text-base">SIGN MIRROR</h3>
+            <p className="text-xs font-semibold text-slate-600 dark:text-slate-300 leading-relaxed">
+              Thực hành ký hiệu từng câu truyện qua camera đối chiếu song song ngay trên thiết bị.
+            </p>
+          </Link>
+
+          <Link
+            to="/circle"
+            onClick={playClick}
+            className="bg-white dark:bg-slate-800 rounded-3xl p-5 border-2 border-sky-200 dark:border-sky-800/70 hover:shadow-lg transition-all space-y-2.5 group"
+          >
+            <div className="w-11 h-11 rounded-2xl bg-sky-100 dark:bg-sky-900/50 text-sky-600 dark:text-sky-300 flex items-center justify-center">
+              <MessageCircle className="w-6 h-6" />
+            </div>
+            <h3 className="font-black text-slate-800 dark:text-white text-base">SIGNORY CIRCLE</h3>
+            <p className="text-xs font-semibold text-slate-600 dark:text-slate-300 leading-relaxed">
+              Cộng đồng phụ huynh và người học chia sẻ hành trình, video và kinh nghiệm đồng hành.
+            </p>
+          </Link>
+
+          <Link
+            to="/kindness"
+            onClick={playClick}
+            className="bg-white dark:bg-slate-800 rounded-3xl p-5 border-2 border-rose-200 dark:border-rose-800/70 hover:shadow-lg transition-all space-y-2.5 group"
+          >
+            <div className="w-11 h-11 rounded-2xl bg-rose-100 dark:bg-rose-900/50 text-rose-500 dark:text-rose-300 flex items-center justify-center">
+              <Heart className="w-6 h-6" />
+            </div>
+            <h3 className="font-black text-slate-800 dark:text-white text-base">Wall of Kindness</h3>
+            <p className="text-xs font-semibold text-slate-600 dark:text-slate-300 leading-relaxed">
+              Không gian nghệ thuật gửi gắm những tấm thiệp yêu thương và lời động viên dịu dàng.
+            </p>
+          </Link>
+
+          <div className="bg-white dark:bg-slate-800 rounded-3xl p-5 border-2 border-amber-300 dark:border-amber-700/70 space-y-2.5">
+            <div className="w-11 h-11 rounded-2xl bg-amber-100 dark:bg-amber-900/50 text-amber-600 dark:text-amber-300 flex items-center justify-center">
+              <Bot className="w-6 h-6" />
+            </div>
+            <h3 className="font-black text-slate-800 dark:text-white text-base">PLUNIS AI</h3>
+            <p className="text-xs font-semibold text-slate-600 dark:text-slate-300 leading-relaxed">
+              Trợ lý mascot màu vàng ở góc phải màn hình sẵn sàng giải đáp ký hiệu & lắng nghe phụ huynh.
+            </p>
+          </div>
+        </div>
+      </section>
+
       {/* Benefits Section */}
       <section className="max-w-6xl mx-auto px-4">
         <div className="bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-600 rounded-[36px] p-8 md:p-12 text-white shadow-xl">
@@ -245,6 +308,7 @@ export const HomePage = ({ onOpenAuth }) => {
           </div>
         </div>
       </section>
+      </div>
     </div>
   );
 };

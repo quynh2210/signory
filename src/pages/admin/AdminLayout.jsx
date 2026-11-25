@@ -8,11 +8,13 @@ import {
   Users, 
   Award, 
   Settings, 
-  ArrowLeft, 
   ShieldAlert,
-  Sparkles,
   Home,
-  Video
+  Video,
+  Bot,
+  Camera,
+  MessageCircle,
+  Heart
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useSound } from '../../context/SoundContext';
@@ -68,7 +70,11 @@ export const AdminLayout = () => {
     { path: '/admin/builder', label: 'Trình Tạo Bài Học', icon: FilePlus },
     { path: '/admin/media', label: 'Quản Lý Media', icon: ImageIcon },
     { path: '/admin/stories', label: 'Câu Chuyện & Chương', icon: BookOpen },
+    { path: '/admin/mirror', label: 'SIGN MIRROR', icon: Camera },
     { path: '/admin/videos', label: 'Video QR', icon: Video },
+    { path: '/admin/ai-knowledge', label: 'Kiến Thức AI', icon: Bot },
+    { path: '/admin/community', label: 'Cộng Đồng Circle', icon: MessageCircle },
+    { path: '/admin/kindness', label: 'Wall of Kindness', icon: Heart },
     { path: '/admin/users', label: 'Người Dùng', icon: Users },
     { path: '/admin/badges', label: 'Phần Thưởng & Huy Hiệu', icon: Award },
     { path: '/admin/settings', label: 'Cài Đặt Hệ Thống & Audio', icon: Settings },
