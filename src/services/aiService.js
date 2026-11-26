@@ -1,6 +1,8 @@
 import { getGenerativeModel, Schema } from 'firebase/ai';
+import { getToken as getAppCheckToken } from 'firebase/app-check';
 import {
   ai,
+  appCheck,
   db,
   doc,
   setDoc,
@@ -765,6 +767,7 @@ function writeCachedWorkingModel(modelName) {
 
 function getErrorStatus(err) {
   if (typeof err?.customErrorData?.status === 'number') return err.customErrorData.status;
+  if (typeof err?.customData?.httpStatus === 'number') return err.customData.httpStatus;
   if (typeof err?.status === 'number') return err.status;
   const match = String(err?.message || '').match(/\b(400|401|403|404|429|500|502|503|504)\b/);
   return match ? Number(match[1]) : 0;
@@ -786,7 +789,6 @@ function isApiNotEnabledError(err) {
 function isAppCheckError(err) {
   const msg = String(err?.message || '').toLowerCase();
   const code = String(err?.code || '').toLowerCase();
-  const status = getErrorStatus(err);
   if (isApiNotEnabledError(err)) return false;
   return (
     code.includes('app-check') ||
@@ -795,7 +797,7 @@ function isAppCheckError(err) {
     msg.includes('appcheck') ||
     msg.includes('x-firebase-appcheck') ||
     msg.includes('recaptcha') ||
-    status === 401
+    msg.includes('attestation')
   );
 }
 
@@ -868,7 +870,11 @@ function getOrderedModelCandidates(preferredTier) {
 function formatAIErrorMessage(err) {
   const msg = String(err?.message || err || '');
   const lower = msg.toLowerCase();
+  const code = String(err?.code || '');
   const status = getErrorStatus(err);
+  const host = typeof window !== 'undefined' ? window.location.hostname : '';
+  const isLocalHost = host === 'localhost' || host === '127.0.0.1';
+  const shortDiag = [code, status ? `HTTP ${status}` : '', host].filter(Boolean).join(' • ');
 
   if (msg === 'RATE_TOO_FAST') {
     return 'Bạn thao tác hơi nhanh một chút, chờ 1 giây rồi gửi lại giúp mình nhé!';
@@ -877,10 +883,26 @@ function formatAIErrorMessage(err) {
     return 'Bạn đã trò chuyện khá nhiều trong ít phút qua. Hãy nghỉ vài phút để mình chuẩn bị năng lượng rồi quay lại đồng hành tiếp nhé!';
   }
   if (isApiNotEnabledError(err)) {
-    return 'Dịch vụ Firebase AI Logic (Gemini Developer API) chưa được bật trên Firebase Console cho dự án này.';
+    return `Dịch vụ Firebase AI Logic (Gemini Developer API) chưa được bật trên Firebase Console cho dự án này.${shortDiag ? ` (${shortDiag})` : ''}`;
   }
   if (isAppCheckError(err)) {
-    return 'Xác thực Firebase App Check chưa hợp lệ (trên web cần đúng Site Key reCAPTCHA Enterprise + domain đã cấu hình; khi chạy local cần đăng ký Debug Token trong Firebase Console -> App Check).';
+    if (isLocalHost) {
+      return `Chạy local (${host}) cần lấy Debug Token trong DevTools Console và thêm vào Firebase Console -> App Check -> Apps -> Manage debug tokens. [${shortDiag}]`;
+    }
+    if (code.includes('recaptcha-error') || lower.includes('recaptcha-error')) {
+      return `Lỗi reCAPTCHA trên domain "${host}" (${code}). Nguyên nhân thường gặp: Site key đang dùng là reCAPTCHA v3 (có Secret Key) chứ không phải reCAPTCHA Enterprise (Fraud Defense), hoặc domain "${host}" chưa được thêm vào key trên Google Cloud reCAPTCHA, hoặc bị trình chặn quảng cáo chặn.`;
+    }
+    if (
+      code.includes('fetch-status-error') ||
+      code.includes('throttled') ||
+      code.includes('initial-throttle')
+    ) {
+      return `Firebase App Check từ chối cấp token (${shortDiag}). Hãy kiểm tra: (1) Đã bật "reCAPTCHA Enterprise API" trong Google Cloud project chưa, (2) Site key ở Fraud Defense có đúng key Enterprise của project này chưa (nếu dùng key reCAPTCHA v3 có Secret Key thì không dùng chung với Fraud Defense được), (3) Đã bấm Save ở trang App Check chưa.`;
+    }
+    return `Xác thực Firebase App Check chưa hợp lệ (${shortDiag || msg.slice(0, 120)}). Kiểm tra lại Site Key reCAPTCHA Enterprise + domain "${host}" trên Google Cloud / Firebase Console.`;
+  }
+  if (status === 401 || status === 403) {
+    return `Yêu cầu tới Gemini API bị từ chối (${shortDiag || '401/403'}). Kiểm tra lại quyền API Key hoặc App Check enforcement trên Firebase Console. Chi tiết: ${msg.slice(0, 140)}`;
   }
   if (err?.name === 'AbortError' || lower.includes('timeout') || lower.includes('timed out')) {
     return 'PLUNIS AI phản hồi hơi lâu so với dự kiến (quá thời gian chờ). Bạn thử gửi lại giúp mình nhé!';
@@ -894,7 +916,7 @@ function formatAIErrorMessage(err) {
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
     return 'Kết nối mạng đang ngoại tuyến. Vui lòng kiểm tra Internet để trò chuyện cùng PLUNIS AI.';
   }
-  return 'Xin lỗi, PLUNIS AI đang gặp chút trục trặc kết nối. Bạn thử gửi lại sau giây lát nhé!';
+  return `Xin lỗi, PLUNIS AI đang gặp trục trặc kết nối${shortDiag ? ` (${shortDiag})` : ''}. Bạn thử gửi lại sau giây lát nhé!`;
 }
 
 async function runModelTurn({
@@ -1018,6 +1040,17 @@ export async function sendMessageToSignoryAI({
   const preferredTier = selectModelTier(trimmed, existingMessages.length);
   const candidates = getOrderedModelCandidates(preferredTier);
   const enableTools = shouldAttachTools(trimmed);
+
+  // Pre-verify App Check token so exact App Check / reCAPTCHA errors surface immediately
+  // instead of being masked as a generic 401/403 from the Gemini endpoint.
+  if (appCheck) {
+    try {
+      await getAppCheckToken(appCheck, false);
+    } catch (acErr) {
+      console.error('Firebase App Check pre-flight failed:', acErr);
+      throw new Error(formatAIErrorMessage(acErr));
+    }
+  }
 
   let aiResponse;
   let lastError = null;

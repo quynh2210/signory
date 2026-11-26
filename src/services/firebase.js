@@ -75,9 +75,10 @@ function initAppCheckOnce(firebaseApp) {
     });
   } else {
     // Production environment: use ReCaptchaEnterpriseProvider ONLY (public site key)
-    const siteKey =
+    const siteKey = String(
       import.meta.env.VITE_FIREBASE_APP_CHECK_SITE_KEY ||
-      '6Lf2CDIuAAAAAGRf9jWnFD-iQSz9StDjLZ05v035';
+        '6Lf2CDIuAAAAAGRf9jWnFD-iQSz9StDjLZ05v035'
+    ).trim();
     provider = new ReCaptchaEnterpriseProvider(siteKey);
   }
 
