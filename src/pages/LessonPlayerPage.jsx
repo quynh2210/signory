@@ -17,6 +17,7 @@ import { getLessonDetails, saveLessonProgress } from '../services/dbService';
 import ContentBlockRenderer from '../components/lesson/ContentBlockRenderer';
 import QuestionRenderer from '../components/quiz/QuestionRenderer';
 import LessonCompletionModal from '../components/lesson/LessonCompletionModal';
+import AtmosphericBackdrop from '../components/common/AtmosphericBackdrop';
 
 export const LessonPlayerPage = () => {
   const { lessonId } = useParams();
@@ -165,9 +166,8 @@ export const LessonPlayerPage = () => {
     : 0;
 
   return (
-    <div className={`min-h-screen flex flex-col justify-between transition-colors duration-300 relative overflow-hidden ${
-      isKidsMode ? 'bg-gradient-to-b from-sky-50 via-purple-50 to-pink-50 dark:from-slate-950 dark:via-purple-950/30 dark:to-slate-900' : 'bg-[#fbfaf6] dark:bg-slate-900'
-    }`}>
+    <div className="min-h-screen flex flex-col justify-between transition-colors duration-300 relative overflow-hidden">
+      <AtmosphericBackdrop variant={isKidsMode ? 'lesson-kids' : 'lesson-parents'} />
       {/* Lesson Start Fullscreen Opaque Illustrated Backdrop Splash (Section 6.4) */}
       <AnimatePresence>
         {showLessonStartSplash && lesson && (
@@ -262,7 +262,7 @@ export const LessonPlayerPage = () => {
       </AnimatePresence>
 
       {/* Top Header / Progress Bar */}
-      <div className="max-w-4xl w-full mx-auto px-4 py-4 flex items-center justify-between gap-4">
+      <div className="relative z-10 max-w-4xl w-full mx-auto px-4 py-4 flex items-center justify-between gap-4">
         {/* Exit Button */}
         <button
           onClick={handleExit}
@@ -301,7 +301,7 @@ export const LessonPlayerPage = () => {
       </div>
 
       {/* Main Step Content */}
-      <main className="flex-1 max-w-3xl w-full mx-auto px-4 py-6 flex flex-col justify-center">
+      <main className="relative z-10 flex-1 max-w-3xl w-full mx-auto px-4 py-6 flex flex-col justify-center">
         <AnimatePresence mode="wait">
           <motion.div
             key={currentStepIndex}

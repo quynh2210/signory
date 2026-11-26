@@ -462,12 +462,37 @@ export const WallOfKindnessPage = () => {
               {/* Actual Wall Board Surface (1150px x 680px logical world) */}
               <div
                 ref={wallBoardRef}
-                className={`relative w-[1080px] h-[640px] shrink-0 rounded-[40px] border-[10px] shadow-2xl overflow-hidden ${
+                className={`relative w-[1080px] h-[640px] shrink-0 rounded-[40px] border-[10px] shadow-2xl overflow-hidden backdrop-blur-md ${
                   isDark
-                    ? 'bg-gradient-to-br from-[#1b2238]/95 via-[#221d3a]/95 to-[#16272e]/95 border-[#3f3758] shadow-indigo-950/60'
-                    : 'bg-gradient-to-br from-[#fff8ec]/95 via-[#fef3e2]/95 to-[#f3f9f1]/95 border-[#e3c89c] shadow-amber-900/15'
+                    ? 'bg-gradient-to-br from-[#161c33]/78 via-[#241b3d]/78 to-[#162632]/78 border-[#4b3f6b]/90 shadow-indigo-950/60'
+                    : 'bg-gradient-to-br from-[#fff8ec]/76 via-[#fef1e6]/76 to-[#fff1f2]/76 border-[#e3c89c]/90 shadow-amber-900/15'
                 }`}
               >
+                {/* Gentle sakura petals blowing across the wall board when wind is ON */}
+                {windEnabled && (
+                  <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
+                    {[
+                      { r: '8%', s: 15, d: '-1s', t: '9s', c: '#fda4af' },
+                      { r: '24%', s: 13, d: '-4.5s', t: '11s', c: '#fbcfe8' },
+                      { r: '42%', s: 16, d: '-7.2s', t: '10s', c: '#f9a8d4' },
+                      { r: '15%', s: 12, d: '-2.8s', t: '12s', c: '#ffe4e6' },
+                    ].map((pt, idx) => (
+                      <div
+                        key={idx}
+                        className="absolute top-0 animate-sakura-fall"
+                        style={{ right: pt.r, animationDelay: pt.d, animationDuration: pt.t }}
+                      >
+                        <svg width={pt.s} height={pt.s} viewBox="0 0 24 24" fill="none">
+                          <path
+                            d="M12 2 C15.2 4.5, 18.8 8.8, 17.5 14.2 C16.5 18.4, 13.6 21.2, 12 21.8 C10.4 21.2, 7.5 18.4, 6.5 14.2 C5.2 8.8, 8.8 4.5, 12 2 Z"
+                            fill={pt.c}
+                            fillOpacity={isDark ? '0.78' : '0.85'}
+                          />
+                        </svg>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {/* Decorative Wall Cork/Garden Grid Texture + Fairy Garland Lights */}
                 <div
                   className="pointer-events-none absolute inset-0 opacity-30 dark:opacity-20"

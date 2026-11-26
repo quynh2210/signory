@@ -235,26 +235,181 @@
 /* ───── Environmental & Atmospheric Animations (GPU-only transform/opacity) ───── */
 @keyframes signory-cloud-drift {
   0% {
-    transform: translate3d(-15%, 0, 0);
+    transform: translate3d(-26vw, 0, 0);
   }
   100% {
-    transform: translate3d(115vw, 0, 0);
+    transform: translate3d(118vw, 0, 0);
   }
 }
 
 @keyframes signory-wind-float {
   0% {
-    transform: translate3d(-20px, -10px, 0) rotate(0deg);
+    transform: translate3d(0, -10vh, 0) rotate(0deg);
     opacity: 0;
   }
-  15% {
-    opacity: 0.75;
+  12% {
+    opacity: 0.85;
   }
-  85% {
+  50% {
+    transform: translate3d(-12vw, 48vh, 0) rotate(140deg);
+    opacity: 0.85;
+  }
+  88% {
+    opacity: 0.78;
+  }
+  100% {
+    transform: translate3d(-24vw, 108vh, 0) rotate(290deg);
+    opacity: 0;
+  }
+}
+
+@keyframes signory-sakura-fall {
+  0% {
+    transform: translate3d(6vw, -12vh, 0) rotate(0deg) scale(0.92);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.92;
+  }
+  30% {
+    transform: translate3d(-8vw, 22vh, 0) rotate(95deg) rotateY(40deg) scale(1);
+  }
+  55% {
+    transform: translate3d(-22vw, 54vh, 0) rotate(205deg) rotateY(-35deg) scale(0.95);
+    opacity: 0.9;
+  }
+  80% {
+    transform: translate3d(-34vw, 84vh, 0) rotate(305deg) rotateY(45deg) scale(0.9);
     opacity: 0.75;
   }
   100% {
-    transform: translate3d(90px, 110px, 0) rotate(220deg);
+    transform: translate3d(-46vw, 114vh, 0) rotate(390deg) scale(0.82);
+    opacity: 0;
+  }
+}
+
+@keyframes signory-sakura-fall-wide {
+  0% {
+    transform: translate3d(10vw, -10vh, 0) rotate(-15deg) scale(0.88);
+    opacity: 0;
+  }
+  12% {
+    opacity: 0.88;
+  }
+  35% {
+    transform: translate3d(-14vw, 28vh, 0) rotate(-120deg) rotateX(45deg) scale(1.02);
+  }
+  65% {
+    transform: translate3d(-36vw, 66vh, 0) rotate(-240deg) rotateX(-35deg) scale(0.94);
+    opacity: 0.82;
+  }
+  100% {
+    transform: translate3d(-62vw, 112vh, 0) rotate(-360deg) scale(0.84);
+    opacity: 0;
+  }
+}
+
+@keyframes signory-bough-sway {
+  0%, 100% {
+    transform: rotate(-1.3deg) translate3d(0, 0, 0);
+  }
+  50% {
+    transform: rotate(1.7deg) translate3d(-5px, 3px, 0);
+  }
+}
+
+@keyframes signory-bough-sway-alt {
+  0%, 100% {
+    transform: rotate(1.4deg) translate3d(0, 0, 0);
+  }
+  50% {
+    transform: rotate(-1.8deg) translate3d(4px, -2px, 0);
+  }
+}
+
+@keyframes signory-bird-glide {
+  0% {
+    transform: translate3d(-18vw, 14px, 0) scale(0.92);
+    opacity: 0;
+  }
+  8% {
+    opacity: 0.85;
+  }
+  35% {
+    transform: translate3d(28vw, -18px, 0) scale(1);
+  }
+  70% {
+    transform: translate3d(76vw, 8px, 0) scale(0.96);
+    opacity: 0.82;
+  }
+  94% {
+    opacity: 0.7;
+  }
+  100% {
+    transform: translate3d(120vw, -12px, 0) scale(0.9);
+    opacity: 0;
+  }
+}
+
+@keyframes signory-wing-flap {
+  0%, 100% {
+    transform: scaleY(1);
+  }
+  50% {
+    transform: scaleY(0.32);
+  }
+}
+
+@keyframes signory-firefly-drift {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) scale(0.9);
+    opacity: 0.25;
+  }
+  25% {
+    transform: translate3d(-16px, -22px, 0) scale(1.15);
+    opacity: 0.95;
+  }
+  50% {
+    transform: translate3d(14px, -38px, 0) scale(0.98);
+    opacity: 0.45;
+  }
+  75% {
+    transform: translate3d(24px, -14px, 0) scale(1.12);
+    opacity: 0.9;
+  }
+}
+
+@keyframes signory-sunbeam-sway {
+  0%, 100% {
+    transform: rotate(-2deg) scaleY(1);
+    opacity: 0.28;
+  }
+  50% {
+    transform: rotate(2.2deg) scaleY(1.05);
+    opacity: 0.55;
+  }
+}
+
+@keyframes signory-grass-sway {
+  0%, 100% {
+    transform: skewX(-4deg);
+  }
+  50% {
+    transform: skewX(6deg);
+  }
+}
+
+@keyframes signory-shooting-star {
+  0%, 74%, 100% {
+    transform: translate3d(0, 0, 0) rotate(-28deg) scaleX(0.4);
+    opacity: 0;
+  }
+  78% {
+    opacity: 0.95;
+    transform: translate3d(-40px, 22px, 0) rotate(-28deg) scaleX(1);
+  }
+  86% {
+    transform: translate3d(-240px, 130px, 0) rotate(-28deg) scaleX(0.75);
     opacity: 0;
   }
 }
@@ -262,11 +417,11 @@
 @keyframes signory-light-pulse {
   0%, 100% {
     transform: scale(0.85);
-    opacity: 0.2;
+    opacity: 0.22;
   }
   50% {
-    transform: scale(1.15);
-    opacity: 0.65;
+    transform: scale(1.18);
+    opacity: 0.78;
   }
 }
 
@@ -275,7 +430,7 @@
     transform: translate3d(0, 0, 0);
   }
   50% {
-    transform: translate3d(0, -6px, 0);
+    transform: translate3d(0, -8px, 0);
   }
 }
 
@@ -285,31 +440,85 @@
     opacity: 0;
   }
   25% {
-    opacity: 0.7;
+    opacity: 0.72;
   }
   100% {
-    transform: translate3d(12px, -140px, 0) scale(1.15);
+    transform: translate3d(16px, -150px, 0) scale(1.18);
     opacity: 0;
   }
 }
 
 .animate-cloud-slow {
-  animation: signory-cloud-drift 65s linear infinite;
+  animation: signory-cloud-drift 68s linear infinite;
   will-change: transform;
 }
 
 .animate-cloud-medium {
-  animation: signory-cloud-drift 42s linear infinite;
+  animation: signory-cloud-drift 44s linear infinite;
   will-change: transform;
 }
 
 .animate-wind-float {
-  animation: signory-wind-float 11s ease-in-out infinite;
+  animation: signory-wind-float 13s linear infinite;
+  will-change: transform, opacity;
+}
+
+.animate-sakura-fall {
+  animation: signory-sakura-fall 11.5s linear infinite;
+  will-change: transform, opacity;
+}
+
+.animate-sakura-fall-wide {
+  animation: signory-sakura-fall-wide 14s linear infinite;
+  will-change: transform, opacity;
+}
+
+.animate-bough-sway {
+  animation: signory-bough-sway 6.5s ease-in-out infinite;
+  transform-origin: 92% 96%;
+  will-change: transform;
+}
+
+.animate-bough-sway-alt {
+  animation: signory-bough-sway-alt 7.8s ease-in-out infinite;
+  transform-origin: 84% 58%;
+  will-change: transform;
+}
+
+.animate-bird-glide {
+  animation: signory-bird-glide 28s linear infinite;
+  will-change: transform, opacity;
+}
+
+.animate-wing-flap {
+  animation: signory-wing-flap 0.85s ease-in-out infinite;
+  transform-origin: center;
+}
+
+.animate-firefly-drift {
+  animation: signory-firefly-drift 9s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+.animate-sunbeam-sway {
+  animation: signory-sunbeam-sway 8.5s ease-in-out infinite;
+  transform-origin: top center;
+  will-change: transform, opacity;
+}
+
+.animate-grass-sway {
+  animation: signory-grass-sway 4.4s ease-in-out infinite;
+  transform-origin: bottom center;
+  will-change: transform;
+}
+
+.animate-shooting-star {
+  animation: signory-shooting-star 13s ease-out infinite;
   will-change: transform, opacity;
 }
 
 .animate-light-pulse {
-  animation: signory-light-pulse 5.5s ease-in-out infinite;
+  animation: signory-light-pulse 4.8s ease-in-out infinite;
   will-change: transform, opacity;
 }
 
@@ -328,6 +537,16 @@
   .animate-cloud-slow,
   .animate-cloud-medium,
   .animate-wind-float,
+  .animate-sakura-fall,
+  .animate-sakura-fall-wide,
+  .animate-bough-sway,
+  .animate-bough-sway-alt,
+  .animate-bird-glide,
+  .animate-wing-flap,
+  .animate-firefly-drift,
+  .animate-sunbeam-sway,
+  .animate-grass-sway,
+  .animate-shooting-star,
   .animate-light-pulse,
   .animate-card-levitate,
   .animate-bubble-rise,
